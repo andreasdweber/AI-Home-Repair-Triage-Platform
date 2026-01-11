@@ -6,7 +6,6 @@ FastAPI backend with Google Gemini AI integration for image analysis
 import os
 import json
 import base64
-import sqlite3
 from datetime import datetime
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,37 +14,54 @@ from typing import Optional
 from dotenv import load_dotenv
 import google.generativeai as genai
 
+# SQLAlchemy imports for PostgreSQL support
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
 # Load environment variables
 load_dotenv()
 
-# Database configuration
-DATABASE_PATH = "leads.db"
+# Database configuration - supports both PostgreSQL (production) and SQLite (local)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    # Production: Use PostgreSQL
+    # Fix Render's postgres:// URL to postgresql:// for SQLAlchemy
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    engine = create_engine(DATABASE_URL)
+else:
+    # Local development: Use SQLite
+    engine = create_engine("sqlite:///./leads.db", connect_args={"check_same_thread": False})
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
 # Admin key for accessing leads (MVP security)
-ADMIN_KEY = "secret123"
+ADMIN_KEY = os.getenv("ADMIN_KEY", "secret123")
+
+
+# SQLAlchemy model for leads
+class Lead(Base):
+    __tablename__ = "leads"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    postal_code = Column(String, nullable=False)
+    issue_category = Column(String, nullable=True)
+    issue_title = Column(String, nullable=True)
+    issue_description = Column(Text, nullable=True)
+    ai_estimated_cost = Column(String, nullable=True)
+    ai_severity = Column(String, nullable=True)
+    ai_recommended_action = Column(Text, nullable=True)
+    timestamp = Column(DateTime, default=datetime.utcnow)
 
 
 def init_db():
-    """Initialize the SQLite database and create tables if they don't exist."""
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS leads (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            phone TEXT NOT NULL,
-            postal_code TEXT NOT NULL,
-            issue_category TEXT,
-            issue_title TEXT,
-            issue_description TEXT,
-            ai_estimated_cost TEXT,
-            ai_severity TEXT,
-            ai_recommended_action TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
+    """Initialize the database and create tables if they don't exist."""
+    Base.metadata.create_all(bind=engine)
 
 
 # Pydantic model for lead submission
@@ -264,27 +280,23 @@ async def create_lead(lead: LeadCreate):
     Accepts lead information along with AI diagnosis details.
     """
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO leads (
-                name, phone, postal_code, issue_category, issue_title,
-                issue_description, ai_estimated_cost, ai_severity, ai_recommended_action
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            lead.name,
-            lead.phone,
-            lead.postal_code,
-            lead.issue_category,
-            lead.issue_title,
-            lead.issue_description,
-            lead.ai_estimated_cost,
-            lead.ai_severity,
-            lead.ai_recommended_action
-        ))
-        conn.commit()
-        lead_id = cursor.lastrowid
-        conn.close()
+        db = SessionLocal()
+        db_lead = Lead(
+            name=lead.name,
+            phone=lead.phone,
+            postal_code=lead.postal_code,
+            issue_category=lead.issue_category,
+            issue_title=lead.issue_title,
+            issue_description=lead.issue_description,
+            ai_estimated_cost=lead.ai_estimated_cost,
+            ai_severity=lead.ai_severity,
+            ai_recommended_action=lead.ai_recommended_action
+        )
+        db.add(db_lead)
+        db.commit()
+        db.refresh(db_lead)
+        lead_id = db_lead.id
+        db.close()
         
         return {
             "status": "success",
@@ -312,22 +324,32 @@ async def get_leads(admin_key: str = Query(None)):
         )
     
     try:
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.row_factory = sqlite3.Row  # Return rows as dictionaries
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT * FROM leads ORDER BY timestamp DESC
-        """)
-        rows = cursor.fetchall()
-        conn.close()
+        db = SessionLocal()
+        leads = db.query(Lead).order_by(Lead.timestamp.desc()).all()
+        db.close()
         
-        # Convert rows to list of dictionaries
-        leads = [dict(row) for row in rows]
+        # Convert to list of dictionaries
+        leads_list = [
+            {
+                "id": lead.id,
+                "name": lead.name,
+                "phone": lead.phone,
+                "postal_code": lead.postal_code,
+                "issue_category": lead.issue_category,
+                "issue_title": lead.issue_title,
+                "issue_description": lead.issue_description,
+                "ai_estimated_cost": lead.ai_estimated_cost,
+                "ai_severity": lead.ai_severity,
+                "ai_recommended_action": lead.ai_recommended_action,
+                "timestamp": lead.timestamp.isoformat() if lead.timestamp else None
+            }
+            for lead in leads
+        ]
         
         return {
             "status": "success",
-            "count": len(leads),
-            "leads": leads
+            "count": len(leads_list),
+            "leads": leads_list
         }
     except Exception as e:
         raise HTTPException(
