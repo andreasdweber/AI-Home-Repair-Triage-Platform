@@ -1,0 +1,21 @@
+# Fix-It AI Backend - Production Dependencies
+
+# Web Framework
+fastapi
+uvicorn[standard]
+gunicorn
+
+# File uploads
+python-multipart
+
+# AI Integration
+google-generativeai
+
+# Environment & Config
+python-dotenv
+
+# HTTP Client
+requests
+
+# Data validation
+pydantic
