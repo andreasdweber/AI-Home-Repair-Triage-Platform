@@ -86,7 +86,7 @@ async def chat(
     session_id: str = Form(...),
     text: str = Form(""),
     file: UploadFile = File(None),
-    escalation_mode: bool = Form(False),
+    escalation_mode: str = Form("false"),
     contact_info: str = Form("{}")
 ):
     """
@@ -154,13 +154,16 @@ async def chat(
         history.append({"role": "user", "content": "[Image uploaded]"})
     
     # Call agent with escalation context
+    # Convert escalation_mode string to bool
+    is_escalation = escalation_mode.lower() in ("true", "1", "yes")
+    
     try:
         agent = MaintenanceAgent()
         result = agent.triage_with_image_bytes(
             history=history,
             image_data=image_data,
             image_mime_type=image_mime_type,
-            escalation_mode=escalation_mode,
+            escalation_mode=is_escalation,
             collected_info=collected_info
         )
     except Exception as e:
