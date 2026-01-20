@@ -82,6 +82,33 @@ async def health():
     return {"status": "ok", "version": "2.0.0"}
 
 
+@app.get("/migrate-once")
+async def migrate_once():
+    """One-time migration endpoint - adds new columns if missing."""
+    from sqlalchemy import text
+    results = []
+    try:
+        with engine.connect() as conn:
+            migrations = [
+                "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS contact_info JSON",
+                "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS category VARCHAR",
+                "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS summary TEXT", 
+                "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS priority VARCHAR",
+                "ALTER TABLE unit_baselines ADD COLUMN IF NOT EXISTS baseline_json JSON",
+                "ALTER TABLE unit_baselines ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP",
+            ]
+            for sql in migrations:
+                try:
+                    conn.execute(text(sql))
+                    results.append(f"OK: {sql[:50]}...")
+                except Exception as e:
+                    results.append(f"Skip: {str(e)[:50]}...")
+            conn.commit()
+        return {"status": "success", "results": results}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /chat - Conversational Triage with Smart Dispatch
 # ─────────────────────────────────────────────────────────────────────────────
