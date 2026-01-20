@@ -56,10 +56,10 @@ class Ticket(Base):
     
     # Contact/access info collected during escalation (JSON)
     # e.g., {"phone": "555-1234", "access_code": "Key #123", "availability": "M-F 9-5"}
-    contact_info = Column(JSON, default=dict)
+    contact_info = Column(JSON, nullable=True)
     
-    # Issue details
-    category = Column(String, default=IssueCategory.OTHER.value)  # Plumbing, Electrical, etc.
+    # Issue details - all nullable for backward compatibility
+    category = Column(String, nullable=True)  # Plumbing, Electrical, etc.
     issue_title = Column(String, nullable=True)
     issue_description = Column(Text, nullable=True)
     
@@ -69,14 +69,13 @@ class Ticket(Base):
     ai_recommended_action = Column(Text, nullable=True)
     
     # "Golden Ticket" vendor summary - concise dispatch info
-    # e.g., "Issue: Leaking Toilet. DIY Failed. Parts: Fill Valve likely. Access: Key #123"
     summary = Column(Text, nullable=True)
     
     # Conversation and status tracking
     conversation_history = Column(JSON, default=list)
-    status = Column(String, default=TicketStatus.OPEN.value)
-    priority = Column(String, default=RiskLevel.GREEN.value)  # Green/Yellow/Red
-    risk_level = Column(String, default=RiskLevel.GREEN.value)  # Alias for compatibility
+    status = Column(String, nullable=True)
+    priority = Column(String, nullable=True)  # Green/Yellow/Red
+    risk_level = Column(String, nullable=True)  # Alias for compatibility
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -98,12 +97,12 @@ class UnitBaseline(Base):
     
     # Structured baseline JSON for item-by-item comparison
     # Format: [{"item": "Wall", "condition": "Good", "room": "Living Room", "timestamp": "0:15"}, ...]
-    baseline_json = Column(JSON, default=list)
+    baseline_json = Column(JSON, nullable=True)
     
     # Audit tracking
-    last_audit_date = Column(DateTime, default=datetime.utcnow)
-    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_audit_date = Column(DateTime, nullable=True)
+    last_updated = Column(DateTime, nullable=True)
     
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
