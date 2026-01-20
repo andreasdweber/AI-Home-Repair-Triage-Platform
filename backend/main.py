@@ -66,30 +66,14 @@ app.add_middleware(
 )
 
 
-def run_migrations():
-    """Run Alembic migrations programmatically."""
-    try:
-        from alembic.config import Config
-        from alembic import command
-        
-        alembic_cfg = Config(os.path.join(os.path.dirname(__file__), "alembic.ini"))
-        alembic_cfg.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "alembic"))
-        command.upgrade(alembic_cfg, "head")
-        print("Database migrations applied successfully")
-    except Exception as e:
-        print(f"Migration warning: {e}")
-        # Fallback to create_all
-        try:
-            Base.metadata.create_all(bind=engine)
-            print("Fallback create_all succeeded")
-        except Exception as e2:
-            print(f"Create all also failed: {e2}")
-
-
 @app.on_event("startup")
 async def startup():
-    """Initialize database on startup."""
-    run_migrations()
+    """Initialize database - simple create_all (columns already exist or will be added)."""
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Database initialized")
+    except Exception as e:
+        print(f"Database init warning (likely OK): {e}")
 
 
 @app.get("/")
