@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Management Demo - Rancho Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        header {
+            background: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        nav ul {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+        
+        nav a {
+            text-decoration: none;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        nav a:hover {
+            color: #667eea;
+        }
+        
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+        
+        .hero {
+            background: white;
+            border-radius: 1rem;
+            padding: 3rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        
+        .hero h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: #333;
+        }
+        
+        .hero p {
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .feature-card {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .feature-card h3 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        
+        .feature-card p {
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .cta-section {
+            background: white;
+            border-radius: 1rem;
+            padding: 3rem;
+            text-align: center;
+            margin-top: 2rem;
+        }
+        
+        .cta-section h2 {
+            margin-bottom: 1rem;
+        }
+        
+        .cta-arrow {
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.5rem 1rem;
+            background: #667eea;
+            color: white;
+            border-radius: 2rem;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: white;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="logo">🏠 Rancho Management</div>
+            <ul>
+                <li><a href="#">Properties</a></li>
+                <li><a href="#">Tenants</a></li>
+                <li><a href="#">Maintenance</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <main>
+        <div class="hero">
+            <h1>Welcome to Rancho Management</h1>
+            <p>Professional property management for residential communities in the Greater Los Angeles area.</p>
+            <p style="color: #667eea; font-weight: 600;">🔧 Need maintenance help? Click the chat button in the bottom-right corner!</p>
+        </div>
+        
+        <div class="features">
+            <div class="feature-card">
+                <h3>🏡 Quality Properties</h3>
+                <p>We manage over 500 units across 15 communities, ensuring comfortable living for all our residents.</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔧 24/7 Maintenance</h3>
+                <p>Our AI-powered maintenance system helps diagnose issues instantly. Try the chat widget now!</p>
+            </div>
+            <div class="feature-card">
+                <h3>📱 Easy Communication</h3>
+                <p>Report issues, track repairs, and get updates all from your phone or computer.</p>
+            </div>
+        </div>
+        
+        <div class="cta-section">
+            <h2>Try Our AI Maintenance Assistant</h2>
+            <p>Click the blue chat button in the bottom-right corner to report a maintenance issue.</p>
+            <p>Our AI will help diagnose the problem and determine the best course of action.</p>
+            <div class="cta-arrow">👇 Look for the chat button</div>
+        </div>
+    </main>
+    
+    <footer>
+        <p>&copy; 2026 Rancho Management. This is a demo site for the Fix-It AI widget.</p>
+    </footer>
+    
+    <!-- ============================================================
+         FIX-IT AI WIDGET EMBED
+         ============================================================
+         
+         DEVELOPMENT (Local):
+         The widget is loaded from the Vite dev server at localhost:5173
+         
+         PRODUCTION:
+         Replace the script src with your deployed frontend URL:
+         - Render: https://your-app.onrender.com/assets/main.js
+         - Cloudflare: https://your-app.pages.dev/assets/main.js
+         
+         You may also need to update the API_URL environment variable
+         in the widget to point to your production backend.
+         ============================================================ -->
+    
+    <!-- Widget mount point -->
+    <div id="fixit-widget"></div>
+    
+    <!-- 
+         DEVELOPMENT: Load from Vite dev server
+         Run `npm run dev` in the frontend folder first
+    -->
+    <script type="module">
+        // For Vite dev server, we import the module directly
+        import('http://localhost:5173/src/main.jsx')
+            .then(() => {
+                console.log('✅ Fix-It AI widget loaded successfully');
+            })
+            .catch((err) => {
+                console.error('❌ Failed to load Fix-It AI widget:', err);
+                console.log('Make sure the frontend dev server is running: cd frontend && npm run dev');
+            });
+    </script>
+    
+    <!--
+         PRODUCTION: Uncomment and use this instead
+         Replace YOUR_FRONTEND_URL with your actual deployed URL
+         
+         <script type="module" src="https://YOUR_FRONTEND_URL/assets/main.js"></script>
+    -->
+    
+</body>
+</html>
