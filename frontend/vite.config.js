@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { resolve } from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -13,9 +14,10 @@ export default defineConfig({
     sourcemap: false,
     // Build as a library for widget embedding
     lib: {
-      entry: 'src/main.jsx',
+      entry: resolve(__dirname, 'src/main.jsx'),
       name: 'FixItAI',
-      fileName: (format) => `fixit-widget.${format}.js`
+      fileName: (format) => `fixit-widget.${format}.js`,
+      formats: ['es', 'umd']
     },
     rollupOptions: {
       // Don't externalize React - bundle it for standalone widget
@@ -23,7 +25,9 @@ export default defineConfig({
         // Ensure CSS is inlined
         assetFileNames: 'fixit-widget.[ext]'
       }
-    }
+    },
+    // Copy public folder contents to dist
+    copyPublicDir: true
   },
   // CSS will be processed by Tailwind and can be imported as string
   css: {

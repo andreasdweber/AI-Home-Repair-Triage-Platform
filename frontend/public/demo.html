@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rancho Management Services - Tenant Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #1a1a2e;
+            line-height: 1.6;
+        }
+        
+        /* Navigation */
+        nav {
+            background: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+        }
+        
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #2563eb;
+            text-decoration: none;
+        }
+        
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.25rem;
+        }
+        
+        nav ul {
+            display: flex;
+            list-style: none;
+            gap: 2rem;
+        }
+        
+        nav a {
+            text-decoration: none;
+            color: #64748b;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        
+        nav a:hover {
+            color: #2563eb;
+        }
+        
+        .nav-cta {
+            background: #2563eb;
+            color: white !important;
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+        
+        .nav-cta:hover {
+            background: #1d4ed8;
+        }
+        
+        /* Hero Section */
+        .hero {
+            padding: 8rem 2rem 6rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 70vh;
+            display: flex;
+            align-items: center;
+        }
+        
+        .hero-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+        
+        .hero-content h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .hero-content p {
+            font-size: 1.25rem;
+            color: #64748b;
+            margin-bottom: 2rem;
+        }
+        
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+        }
+        
+        .btn-primary:hover {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: #334155;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            border-color: #2563eb;
+            color: #2563eb;
+        }
+        
+        .hero-image {
+            position: relative;
+        }
+        
+        .hero-image img {
+            width: 100%;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+        }
+        
+        .hero-image-placeholder {
+            width: 100%;
+            height: 400px;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-radius: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #2563eb;
+            font-size: 4rem;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.1);
+        }
+        
+        .hero-image-placeholder span {
+            font-size: 1rem;
+            margin-top: 1rem;
+            color: #64748b;
+        }
+        
+        /* Features Section */
+        .features {
+            padding: 6rem 2rem;
+            background: white;
+        }
+        
+        .features-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+        
+        .section-header h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #1e293b;
+        }
+        
+        .section-header p {
+            font-size: 1.125rem;
+            color: #64748b;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+        }
+        
+        .feature-card {
+            background: #f8fafc;
+            padding: 2rem;
+            border-radius: 16px;
+            transition: all 0.3s;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            border-color: #2563eb;
+        }
+        
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .feature-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: #1e293b;
+        }
+        
+        .feature-card p {
+            color: #64748b;
+        }
+        
+        /* Tenant Portal Section */
+        .portal {
+            padding: 6rem 2rem;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: white;
+        }
+        
+        .portal-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+        
+        .portal-content h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+        
+        .portal-content p {
+            font-size: 1.125rem;
+            color: #94a3b8;
+            margin-bottom: 2rem;
+        }
+        
+        .portal-features {
+            list-style: none;
+        }
+        
+        .portal-features li {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 1.125rem;
+        }
+        
+        .portal-features li::before {
+            content: "✓";
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: #22c55e;
+            border-radius: 50%;
+            font-size: 0.875rem;
+            flex-shrink: 0;
+        }
+        
+        .portal-demo {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            color: #1e293b;
+        }
+        
+        .portal-demo h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+        
+        .demo-instructions {
+            background: #f0f9ff;
+            border: 2px dashed #2563eb;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .demo-instructions p {
+            color: #64748b;
+            margin-bottom: 1rem;
+        }
+        
+        .demo-arrow {
+            font-size: 2rem;
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(10px); }
+        }
+        
+        /* Footer */
+        footer {
+            background: white;
+            padding: 3rem 2rem;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .footer-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .footer-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            color: #64748b;
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 2rem;
+        }
+        
+        .footer-links a {
+            color: #64748b;
+            text-decoration: none;
+        }
+        
+        .footer-links a:hover {
+            color: #2563eb;
+        }
+        
+        /* Responsive */
+        @media (max-width: 968px) {
+            .hero-container,
+            .portal-container {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+            
+            .hero-content h1 {
+                font-size: 2.5rem;
+            }
+            
+            .hero-buttons {
+                justify-content: center;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .portal-features {
+                display: inline-block;
+                text-align: left;
+            }
+            
+            nav ul {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <a href="#" class="logo">
+                <div class="logo-icon">🏠</div>
+                Rancho Management
+            </a>
+            <ul>
+                <li><a href="#">Properties</a></li>
+                <li><a href="#">Residents</a></li>
+                <li><a href="#">Maintenance</a></li>
+                <li><a href="#">About</a></li>
+                <li><a href="#" class="nav-cta">Tenant Login</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-container">
+            <div class="hero-content">
+                <h1>Property Management Made Simple</h1>
+                <p>Rancho Management Services provides premium property management for residential communities across Southern California. Experience the difference of responsive, professional service.</p>
+                <div class="hero-buttons">
+                    <a href="#portal" class="btn-primary">
+                        🔧 Report an Issue
+                    </a>
+                    <a href="#" class="btn-secondary">
+                        📞 Contact Us
+                    </a>
+                </div>
+            </div>
+            <div class="hero-image">
+                <div class="hero-image-placeholder">
+                    🏡
+                    <span>Modern Living Communities</span>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Features Section -->
+    <section class="features">
+        <div class="features-container">
+            <div class="section-header">
+                <h2>Why Residents Love Us</h2>
+                <p>We combine technology with personalized service to make your living experience exceptional.</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>AI-Powered Maintenance</h3>
+                    <p>Our intelligent assistant helps diagnose issues instantly, 24/7. Get immediate guidance on whether it's a quick fix or needs professional attention.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Fast Response Times</h3>
+                    <p>Emergency issues are prioritized automatically. Our AI triages every request to ensure urgent problems get immediate attention.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>Easy Communication</h3>
+                    <p>Report issues from any device. Upload photos, describe problems, and track repair status all in one place.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎥</div>
+                    <h3>Video Move-In/Out Audits</h3>
+                    <p>Our AI analyzes walkthrough videos to document condition accurately, protecting both tenants and owners.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">💰</div>
+                    <h3>Transparent Pricing</h3>
+                    <p>Get instant cost estimates for repairs. No surprises, no hidden fees. Know what to expect before work begins.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <h3>Secure & Private</h3>
+                    <p>Your data is protected with enterprise-grade security. We never share your information with third parties.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Tenant Portal Section -->
+    <section class="portal" id="portal">
+        <div class="portal-container">
+            <div class="portal-content">
+                <h2>Tenant Self-Service Portal</h2>
+                <p>Report maintenance issues instantly with our AI assistant. Upload photos, describe the problem, and get immediate guidance.</p>
+                <ul class="portal-features">
+                    <li>Instant AI diagnosis of common issues</li>
+                    <li>Photo and video upload support</li>
+                    <li>24/7 availability - no waiting</li>
+                    <li>Automatic priority routing</li>
+                    <li>Self-help guides for minor fixes</li>
+                </ul>
+            </div>
+            <div class="portal-demo">
+                <h3>Try It Now!</h3>
+                <div class="demo-instructions">
+                    <p><strong>Click the blue chat button</strong> in the bottom-right corner to report a maintenance issue.</p>
+                    <p>Our AI assistant will help diagnose the problem and determine the best course of action.</p>
+                    <div class="demo-arrow">👇</div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-logo">
+                🏠 Rancho Management Services © 2026
+            </div>
+            <div class="footer-links">
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Service</a>
+                <a href="#">Contact</a>
+            </div>
+        </div>
+    </footer>
+    
+    <!-- ============================================================
+         FIX-IT AI WIDGET EMBED
+         ============================================================
+         The widget is bundled as a standalone JS file.
+         In production (Cloudflare Pages), this loads the built widget.
+         ============================================================ -->
+    
+    <div id="fixit-widget"></div>
+    
+    <!-- Production: Load the bundled widget -->
+    <script type="module" src="/fixit-widget.es.js"></script>
+    
+    <!-- 
+         Alternative for development with Vite dev server:
+         <script type="module" src="http://localhost:5173/src/main.jsx"></script>
+    -->
+    
+</body>
+</html>
