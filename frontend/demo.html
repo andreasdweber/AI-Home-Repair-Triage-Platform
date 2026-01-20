@@ -557,19 +557,12 @@
     <!-- ============================================================
          FIX-IT AI WIDGET EMBED
          ============================================================
-         The widget is bundled as a standalone JS file.
-         In production (Cloudflare Pages), this loads the built widget.
+         The widget auto-mounts itself - no container div needed!
+         Just include the script and the widget appears.
          ============================================================ -->
     
-    <div id="fixit-widget"></div>
-    
-    <!-- Production: Load the bundled widget -->
-    <script type="module" src="/fixit-widget.es.js"></script>
-    
-    <!-- 
-         Alternative for development with Vite dev server:
-         <script type="module" src="http://localhost:5173/src/main.jsx"></script>
-    -->
+    <!-- Widget Entry Point - Self-mounting -->
+    <script type="module" src="/src/main.jsx"></script>
     
 </body>
 </html>

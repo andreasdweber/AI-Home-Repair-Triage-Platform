@@ -6,17 +6,27 @@ import App from './App.jsx'
 import tailwindStyles from './index.css?inline'
 
 /**
- * Mount Fix-It AI widget with Shadow DOM isolation
+ * Mount Fix-It AI widget with Shadow DOM isolation.
+ * Self-mounting: Creates container if it doesn't exist.
  */
-function mountWidget(containerId = 'fixit-widget', config = {}) {
-  const container = document.getElementById(containerId)
+function mountWidget(containerId = 'fixit-widget-container', config = {}) {
+  // Self-mounting: Create container if it doesn't exist
+  let container = document.getElementById(containerId)
   
   if (!container) {
-    console.error(`[Fix-It AI] Container #${containerId} not found`)
+    console.log(`[Fix-It AI] Creating container #${containerId}`)
+    container = document.createElement('div')
+    container.id = containerId
+    document.body.appendChild(container)
+  }
+  
+  // Check if already mounted (prevent double-mounting)
+  if (container.shadowRoot) {
+    console.log('[Fix-It AI] Widget already mounted')
     return null
   }
   
-  // Create Shadow DOM
+  // Create Shadow DOM for style isolation
   const shadowRoot = container.attachShadow({ mode: 'open' })
   
   // Inject Tailwind + custom styles into Shadow DOM
@@ -32,17 +42,26 @@ function mountWidget(containerId = 'fixit-widget', config = {}) {
       to { opacity: 1; transform: translateY(0); }
     }
     
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-25%); }
+    }
+    
     .animate-slideUp {
       animation: slideUp 0.2s ease-out;
+    }
+    
+    .animate-bounce {
+      animation: bounce 1s infinite;
     }
   `
   shadowRoot.appendChild(style)
   
-  // Create mount point
+  // Create mount point for React
   const mountPoint = document.createElement('div')
   shadowRoot.appendChild(mountPoint)
   
-  // Render React app
+  // Render React app into Shadow DOM
   const root = createRoot(mountPoint)
   root.render(
     <StrictMode>
@@ -50,22 +69,29 @@ function mountWidget(containerId = 'fixit-widget', config = {}) {
     </StrictMode>
   )
   
+  console.log('[Fix-It AI] Widget mounted successfully ✅')
+  
   return { unmount: () => root.unmount(), shadowRoot }
 }
 
-// Auto-mount on DOM ready
-const autoMount = () => {
-  const target = document.getElementById('fixit-widget') || document.getElementById('root')
-  if (target) mountWidget(target.id)
+/**
+ * Auto-mount on page load.
+ * Creates its own container - works on ANY page without HTML modifications.
+ */
+function autoMount() {
+  // Always create/use our standard container
+  mountWidget('fixit-widget-container', {})
 }
 
+// Run auto-mount when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', autoMount)
 } else {
+  // DOM already loaded
   autoMount()
 }
 
-// Expose for manual mounting
+// Expose to global scope for manual mounting and configuration
 window.FixItAI = { mountWidget }
 
 export { mountWidget }

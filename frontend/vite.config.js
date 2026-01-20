@@ -12,18 +12,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    // Build as a library for widget embedding
-    lib: {
-      entry: resolve(__dirname, 'src/main.jsx'),
-      name: 'FixItAI',
-      fileName: (format) => `fixit-widget.${format}.js`,
-      formats: ['es', 'umd']
-    },
     rollupOptions: {
-      // Don't externalize React - bundle it for standalone widget
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        demo: resolve(__dirname, 'demo.html')
+      },
       output: {
-        // Ensure CSS is inlined
-        assetFileNames: 'fixit-widget.[ext]'
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     },
     // Copy public folder contents to dist
