@@ -68,7 +68,10 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        print(f"Database initialization warning: {e}")
 
 
 @app.get("/")
