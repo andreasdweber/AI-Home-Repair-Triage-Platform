@@ -87,7 +87,7 @@ export default function App() {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         role: 'assistant',
-        text: '⚠️ Error connecting to server.',
+        text: '⚠️ Error connecting to server. The server may be waking up (free tier). Please wait 30 seconds and try again.',
         error: true
       }])
     } finally {
@@ -143,7 +143,7 @@ export default function App() {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         role: 'assistant',
-        text: '⚠️ Error processing video audit. Check that the backend is running.',
+        text: '⚠️ Error processing video audit. The server may be waking up. Please wait 30-60 seconds and try again.',
         error: true
       }])
     } finally {
@@ -253,7 +253,14 @@ export default function App() {
                   Move-Out
                 </button>
               </div>
-              <p className="text-xs text-purple-600">📁 {file.name}</p>
+              <p className="text-xs text-purple-600 truncate">📁 {file.name}</p>
+              <button
+                onClick={sendMessage}
+                disabled={loading || !unitId.trim()}
+                className="w-full py-2 bg-purple-600 text-white text-sm font-medium rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {loading ? 'Processing Video...' : `Start ${auditMode === 'move-out' ? 'Move-Out' : 'Move-In'} Audit`}
+              </button>
             </div>
           )}
 
