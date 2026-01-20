@@ -96,8 +96,15 @@ async def chat(
     """
     
     # Get or create ticket for this session
+    # session_id can be "s_<timestamp>" from widget or a numeric ticket ID
+    ticket_id = None
+    if session_id and session_id.isdigit():
+        ticket_id = int(session_id)
+    
     with get_db() as db:
-        ticket = db.query(Ticket).filter(Ticket.id == int(session_id) if session_id.isdigit() else False).first()
+        ticket = None
+        if ticket_id:
+            ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
         
         if not ticket:
             # Create new ticket for this session
@@ -109,6 +116,7 @@ async def chat(
             )
             db.add(ticket)
             db.flush()
+            ticket_id = ticket.id  # Get the new ticket ID
         
         history = ticket.conversation_history or []
     
@@ -139,9 +147,9 @@ async def chat(
     if result.get("text"):
         history.append({"role": "assistant", "content": result["text"]})
     
-    # Save to DB
+    # Save to DB using the ticket_id we got/created earlier
     with get_db() as db:
-        ticket = db.query(Ticket).filter(Ticket.id == int(session_id) if session_id.isdigit() else False).first()
+        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
         if ticket:
             ticket.conversation_history = history
             if result.get("risk"):
@@ -150,7 +158,7 @@ async def chat(
                 ticket.status = TicketStatus.ESCALATED.value
     
     return {
-        "session_id": str(ticket.id) if ticket else session_id,
+        "session_id": str(ticket_id),
         "response": result.get("text"),
         "risk": result.get("risk"),
         "action": result.get("action"),
