@@ -185,11 +185,11 @@ async def chat(
     try:
         # Initialize agent and run triage
         agent = MaintenanceAgent()
-        result = agent.triage_issue(history, image_data, image_mime_type)
+        result = agent.triage_with_image_bytes(history, image_data, image_mime_type)
         
         # Add AI response to history
-        if result.get("response"):
-            history.append({"role": "assistant", "content": result["response"]})
+        if result.get("text"):
+            history.append({"role": "assistant", "content": result["text"]})
         
         # Update ticket if ID provided
         if ticket_id:
@@ -198,26 +198,20 @@ async def chat(
                 ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
                 if ticket:
                     ticket.conversation_history = history
-                    if result.get("risk_level"):
-                        ticket.risk_level = result["risk_level"]
-                    if result.get("recommended_status"):
-                        ticket.status = result["recommended_status"]
-                    if result.get("diagnosis"):
-                        ticket.ai_diagnosis = json.dumps(result["diagnosis"])
-                        ticket.ai_recommended_action = result["diagnosis"].get("recommended_action")
-                        ticket.ai_estimated_cost = result["diagnosis"].get("estimated_cost_range")
-                        ticket.issue_title = result["diagnosis"].get("issue_title")
+                    if result.get("risk"):
+                        ticket.risk_level = result["risk"]
+                    if result.get("action") == "Escalate":
+                        ticket.status = TicketStatus.ESCALATED.value
                     db.commit()
             finally:
                 db.close()
         
         return {
             "success": True,
-            "response": result.get("response"),
-            "diagnosis": result.get("diagnosis"),
-            "risk_level": result.get("risk_level"),
-            "needs_more_info": result.get("needs_more_info", True),
-            "recommended_status": result.get("recommended_status"),
+            "response": result.get("text"),
+            "risk_level": result.get("risk"),
+            "action": result.get("action"),
+            "needs_more_info": result.get("action") == "Info",
             "conversation_history": history
         }
         
@@ -257,27 +251,26 @@ async def audit_move_in(
         
         # Initialize agent and run audit
         agent = MaintenanceAgent()
-        result = agent.audit_video(
+        result = agent.audit_video_bytes(
             video_data=video_data,
             video_mime_type=video.content_type,
-            mode="move-in",
-            unit_id=unit_id
+            mode="move-in"
         )
         
-        if result.get("success") and result.get("baseline_description"):
+        if result.get("success") and result.get("summary"):
             # Save or update baseline in database
             db = get_db()
             try:
                 existing = db.query(UnitBaseline).filter(UnitBaseline.unit_id == unit_id).first()
                 
                 if existing:
-                    existing.move_in_video_summary = result["baseline_description"]
+                    existing.move_in_video_summary = result["summary"]
                     existing.last_audit_date = datetime.utcnow()
                     existing.updated_at = datetime.utcnow()
                 else:
                     baseline = UnitBaseline(
                         unit_id=unit_id,
-                        move_in_video_summary=result["baseline_description"],
+                        move_in_video_summary=result["summary"],
                         last_audit_date=datetime.utcnow()
                     )
                     db.add(baseline)
@@ -338,12 +331,11 @@ async def audit_move_out(
         
         # Initialize agent and run comparison audit
         agent = MaintenanceAgent()
-        result = agent.audit_video(
+        result = agent.audit_video_bytes(
             video_data=video_data,
             video_mime_type=video.content_type,
             mode="move-out",
-            unit_id=unit_id,
-            baseline_description=baseline_description
+            baseline_text=baseline_description
         )
         
         return result
