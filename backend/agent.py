@@ -16,7 +16,17 @@ import time
 import re
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
-import google.generativeai as genai
+
+# Lazy load genai to reduce startup memory
+genai = None
+
+def _get_genai():
+    """Lazy load Google Generative AI module."""
+    global genai
+    if genai is None:
+        import google.generativeai as _genai
+        genai = _genai
+    return genai
 
 load_dotenv()
 
@@ -71,15 +81,32 @@ class MaintenanceAgent:
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY not configured. Please set it in the .env file.")
         
-        genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel(
-            model_name=GEMINI_MODEL,
-            system_instruction=TRIAGE_SYSTEM_PROMPT
-        )
-        self.escalation_model = genai.GenerativeModel(
-            model_name=GEMINI_MODEL,
-            system_instruction=ESCALATION_SYSTEM_PROMPT
-        )
+        self._model = None
+        self._escalation_model = None
+    
+    @property
+    def model(self):
+        """Lazy-load the main Gemini model."""
+        if self._model is None:
+            genai = _get_genai()
+            genai.configure(api_key=self.api_key)
+            self._model = genai.GenerativeModel(
+                model_name=GEMINI_MODEL,
+                system_instruction=TRIAGE_SYSTEM_PROMPT
+            )
+        return self._model
+    
+    @property
+    def escalation_model(self):
+        """Lazy-load the escalation Gemini model."""
+        if self._escalation_model is None:
+            genai = _get_genai()
+            genai.configure(api_key=self.api_key)
+            self._escalation_model = genai.GenerativeModel(
+                model_name=GEMINI_MODEL,
+                system_instruction=ESCALATION_SYSTEM_PROMPT
+            )
+        return self._escalation_model
     
     # ─────────────────────────────────────────────────────────────────────────────
     # GIVE UP DETECTION & ESCALATION
@@ -584,6 +611,7 @@ Return ONLY the JSON array, nothing else."""
     
     def _upload_video(self, video_path: str):
         """Upload video to Gemini File API."""
+        genai = _get_genai()
         ext = os.path.splitext(video_path)[1].lower()
         mime_types = {
             ".mp4": "video/mp4",
@@ -608,6 +636,7 @@ Return ONLY the JSON array, nothing else."""
     def _delete_video(self, video_file):
         """Delete uploaded video from Gemini."""
         try:
+            genai = _get_genai()
             genai.delete_file(video_file.name)
         except Exception:
             pass
