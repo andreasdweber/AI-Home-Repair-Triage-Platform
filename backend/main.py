@@ -68,10 +68,31 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
+    """Initialize database with Alembic migrations."""
+    import subprocess
+    import sys
+    
     try:
-        Base.metadata.create_all(bind=engine)
+        # Run Alembic migrations to ensure schema is up to date
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        if result.returncode == 0:
+            print("Database migrations applied successfully")
+        else:
+            print(f"Migration warning: {result.stderr}")
+            # Fallback to create_all if migrations fail (e.g., tables don't exist)
+            Base.metadata.create_all(bind=engine)
     except Exception as e:
         print(f"Database initialization warning: {e}")
+        # Fallback to create_all
+        try:
+            Base.metadata.create_all(bind=engine)
+        except Exception as e2:
+            print(f"Create all also failed: {e2}")
 
 
 @app.get("/")
