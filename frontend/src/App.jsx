@@ -1,203 +1,624 @@
 import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
-import { 
-  Upload, 
-  Camera, 
-  AlertTriangle, 
-  DollarSign, 
-  Wrench, 
-  Shield,
-  Phone,
-  CheckCircle,
-  Loader2,
-  ImageIcon,
+import {
+  MessageCircle,
   X,
-  Zap,
-  Droplets,
-  Flame,
-  Hammer,
-  Copy,
-  Check,
-  MapPin,
-  User,
-  Calendar,
-  RefreshCw,
-  Database
+  Send,
+  Image,
+  Video,
+  Loader2,
+  AlertTriangle,
+  CheckCircle,
+  Wrench,
+  ChevronDown,
+  Upload,
+  Home,
+  ClipboardCheck
 } from 'lucide-react'
 
-// Backend API URL - uses environment variable in production
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// Default API URL - can be overridden via config
+const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-function App() {
+function App({ config = {}, shadowRoot }) {
+  const apiUrl = config.apiUrl || DEFAULT_API_URL
+  const position = config.position || 'bottom-right'
+
+  // Widget state
+  const [isOpen, setIsOpen] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
+
+  // Chat state
+  const [messages, setMessages] = useState([
+    {
+      id: 1,
+      role: 'assistant',
+      content: "Hi! I'm Fix-It AI 🔧 I can help diagnose maintenance issues or conduct move-in/move-out video audits. What can I help you with today?",
+      timestamp: new Date()
+    }
+  ])
+  const [inputValue, setInputValue] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [conversationHistory, setConversationHistory] = useState([])
+
+  // Image/Video state
   const [selectedImage, setSelectedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analysisResult, setAnalysisResult] = useState(null)
-  const [error, setError] = useState(null)
-  const [description, setDescription] = useState('')
-  const [category, setCategory] = useState('')
+  const [selectedVideo, setSelectedVideo] = useState(null)
+
+  // Audit mode state
+  const [auditMode, setAuditMode] = useState(null) // 'move-in' | 'move-out' | null
+  const [unitId, setUnitId] = useState('')
+  const [showAuditPanel, setShowAuditPanel] = useState(false)
+
+  // Refs
+  const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
+  const videoInputRef = useRef(null)
 
-  // Lead form state
-  const [leadName, setLeadName] = useState('')
-  const [leadPhone, setLeadPhone] = useState('')
-  const [leadZip, setLeadZip] = useState('')
-  const [leadSubmitted, setLeadSubmitted] = useState(false)
-  const [isSubmittingLead, setIsSubmittingLead] = useState(false)
-
-  // Copy to clipboard state
-  const [copied, setCopied] = useState(false)
-
-  // Admin dashboard state
-  const [isAdminMode, setIsAdminMode] = useState(false)
-  const [leads, setLeads] = useState([])
-  const [isLoadingLeads, setIsLoadingLeads] = useState(false)
-  const [adminError, setAdminError] = useState(null)
-
-  // Check for admin mode on mount
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    if (urlParams.get('admin') === 'true') {
-      setIsAdminMode(true)
-      fetchLeads()
-    }
-  }, [])
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
-  // Fetch leads for admin dashboard
-  const fetchLeads = async () => {
-    setIsLoadingLeads(true)
-    setAdminError(null)
-    try {
-      const response = await axios.get(`${API_URL}/leads?admin_key=secret123`)
-      setLeads(response.data.leads || [])
-    } catch (err) {
-      setAdminError(err.response?.data?.detail || 'Failed to fetch leads')
-    } finally {
-      setIsLoadingLeads(false)
-    }
+  // Handle widget open/close
+  const openWidget = () => {
+    setIsOpen(true)
+    setIsClosing(false)
   }
 
-  // Handle lead form submission - now sends to backend
-  const handleLeadSubmit = async (e) => {
-    e.preventDefault()
-    if (!leadName || !leadPhone || !leadZip) return
-
-    setIsSubmittingLead(true)
-    try {
-      await axios.post(`${API_URL}/leads`, {
-        name: leadName,
-        phone: leadPhone,
-        postal_code: leadZip,
-        issue_category: analysisResult?.trade_category || category || null,
-        issue_title: analysisResult?.issue_title || null,
-        issue_description: description || null,
-        ai_estimated_cost: analysisResult?.estimated_cost_range || null,
-        ai_severity: analysisResult?.severity || null,
-        ai_recommended_action: analysisResult?.recommended_action || null
-      })
-      setLeadSubmitted(true)
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to submit request. Please try again.')
-    } finally {
-      setIsSubmittingLead(false)
-    }
+  const closeWidget = () => {
+    setIsClosing(true)
+    setTimeout(() => {
+      setIsOpen(false)
+      setIsClosing(false)
+    }, 200)
   }
 
-  // Copy report to clipboard
-  const copyReport = async () => {
-    if (!analysisResult) return
-    
-    const reportText = `[Fix-It AI Report - Vancouver]
-Issue: ${analysisResult.issue_title}
-Severity: ${analysisResult.severity}
-Est. Cost: ${analysisResult.estimated_cost_range}
-Action: ${analysisResult.recommended_action || 'N/A'}`
-    
-    try {
-      await navigator.clipboard.writeText(reportText)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
-  }
-
-  const handleImageSelect = (event) => {
-    const file = event.target.files[0]
-    if (file) {
-      setSelectedImage(file)
-      setImagePreview(URL.createObjectURL(file))
-      setAnalysisResult(null)
-      setError(null)
-    }
-  }
-
-  const handleDrop = (event) => {
-    event.preventDefault()
-    const file = event.dataTransfer.files[0]
+  // Handle image selection
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0]
     if (file && file.type.startsWith('image/')) {
       setSelectedImage(file)
       setImagePreview(URL.createObjectURL(file))
-      setAnalysisResult(null)
-      setError(null)
     }
   }
 
-  const handleDragOver = (event) => {
-    event.preventDefault()
+  // Handle video selection
+  const handleVideoSelect = (e) => {
+    const file = e.target.files[0]
+    if (file && file.type.startsWith('video/')) {
+      setSelectedVideo(file)
+    }
   }
 
+  // Clear selected media
   const clearImage = () => {
     setSelectedImage(null)
     setImagePreview(null)
-    setAnalysisResult(null)
-    setError(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const analyzeImage = async () => {
-    // Allow submission if we have an image OR a description/category
-    if (!selectedImage && !description && !category) {
-      setError('Please provide an image, description, or select a category to analyze.')
-      return
+  const clearVideo = () => {
+    setSelectedVideo(null)
+    if (videoInputRef.current) videoInputRef.current.value = ''
+  }
+
+  // Send chat message
+  const sendMessage = async () => {
+    if (!inputValue.trim() && !selectedImage) return
+
+    const userMessage = {
+      id: Date.now(),
+      role: 'user',
+      content: inputValue,
+      image: imagePreview,
+      timestamp: new Date()
     }
 
-    setIsAnalyzing(true)
-    setError(null)
+    setMessages(prev => [...prev, userMessage])
+    setInputValue('')
+    setIsLoading(true)
 
-    const formData = new FormData()
-    if (selectedImage) {
-      formData.append('image', selectedImage)
-    }
-    formData.append('description', description)
-    formData.append('category', category)
+    // Update conversation history for API
+    const newHistory = [...conversationHistory, { role: 'user', content: inputValue }]
 
     try {
-      const response = await axios.post(`${API_URL}/analyze`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
+      const formData = new FormData()
+      formData.append('message', inputValue)
+      formData.append('conversation_history', JSON.stringify(newHistory))
+
+      if (selectedImage) {
+        formData.append('image', selectedImage)
+      }
+
+      const response = await axios.post(`${apiUrl}/chat`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       })
-      setAnalysisResult(response.data.analysis)
+
+      const { response: aiResponse, diagnosis, risk_level, needs_more_info } = response.data
+
+      // Add AI response to messages
+      const assistantMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: aiResponse,
+        diagnosis,
+        riskLevel: risk_level,
+        needsMoreInfo: needs_more_info,
+        timestamp: new Date()
+      }
+
+      setMessages(prev => [...prev, assistantMessage])
+
+      // Update conversation history
+      setConversationHistory([
+        ...newHistory,
+        { role: 'assistant', content: aiResponse }
+      ])
+
+      clearImage()
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to analyze. Please try again.')
+      const errorMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: "I'm sorry, I encountered an error. Please try again.",
+        isError: true,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
     } finally {
-      setIsAnalyzing(false)
+      setIsLoading(false)
     }
   }
 
-  const getSeverityColor = (severity) => {
-    switch (severity?.toLowerCase()) {
-      case 'low':
-        return 'bg-green-100 text-green-800 border-green-200'
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'high':
-        return 'bg-red-100 text-red-800 border-red-200'
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
+  // Handle video audit submission
+  const submitVideoAudit = async () => {
+    if (!selectedVideo || !unitId.trim() || !auditMode) return
+
+    const loadingMessage = {
+      id: Date.now(),
+      role: 'assistant',
+      content: `Processing ${auditMode} video audit for Unit ${unitId}... This may take a minute.`,
+      isLoading: true,
+      timestamp: new Date()
+    }
+
+    setMessages(prev => [...prev, loadingMessage])
+    setShowAuditPanel(false)
+    setIsLoading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('video', selectedVideo)
+      formData.append('unit_id', unitId)
+
+      const endpoint = auditMode === 'move-in' ? '/audit/move-in' : '/audit/move-out'
+      const response = await axios.post(`${apiUrl}${endpoint}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+
+      // Remove loading message and add result
+      setMessages(prev => {
+        const filtered = prev.filter(m => m.id !== loadingMessage.id)
+        return [
+          ...filtered,
+          {
+            id: Date.now() + 1,
+            role: 'assistant',
+            content: auditMode === 'move-in'
+              ? `✅ Move-in audit complete for Unit ${unitId}! I've documented the baseline condition.`
+              : `✅ Move-out audit complete for Unit ${unitId}!`,
+            auditResult: response.data,
+            auditMode,
+            timestamp: new Date()
+          }
+        ]
+      })
+
+      // Reset audit state
+      clearVideo()
+      setUnitId('')
+      setAuditMode(null)
+    } catch (err) {
+      setMessages(prev => {
+        const filtered = prev.filter(m => m.id !== loadingMessage.id)
+        return [
+          ...filtered,
+          {
+            id: Date.now() + 1,
+            role: 'assistant',
+            content: err.response?.data?.detail || 'Failed to process video audit. Please try again.',
+            isError: true,
+            timestamp: new Date()
+          }
+        ]
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Handle enter key
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }
+
+  // Get risk level styling
+  const getRiskBadge = (level) => {
+    const styles = {
+      Green: 'bg-green-100 text-green-700 border-green-200',
+      Yellow: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+      Red: 'bg-red-100 text-red-700 border-red-200'
+    }
+    return styles[level] || 'bg-gray-100 text-gray-700 border-gray-200'
+  }
+
+  return (
+    <div className="fixed bottom-4 sm:bottom-6 z-[9999]" style={{ [position === 'bottom-left' ? 'left' : 'right']: '16px' }}>
+      {/* Chat Window */}
+      {isOpen && (
+        <div
+          className={`mb-4 w-[360px] sm:w-[400px] h-[600px] max-h-[80vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200 ${isClosing ? 'widget-close' : 'widget-open'}`}
+        >
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <Wrench className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">Fix-It AI</h3>
+                <p className="text-xs text-blue-100">Maintenance Assistant</p>
+              </div>
+            </div>
+            <button
+              onClick={closeWidget}
+              className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                    message.role === 'user'
+                      ? 'bg-blue-600 text-white rounded-br-md'
+                      : message.isError
+                        ? 'bg-red-50 text-red-700 border border-red-200 rounded-bl-md'
+                        : 'bg-white text-gray-800 shadow-sm border border-gray-100 rounded-bl-md'
+                  }`}
+                >
+                  {/* User's image preview */}
+                  {message.image && (
+                    <img
+                      src={message.image}
+                      alt="Uploaded"
+                      className="rounded-lg mb-2 max-h-40 object-cover"
+                    />
+                  )}
+
+                  {/* Message content */}
+                  {message.isLoading ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">{message.content}</span>
+                    </div>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  )}
+
+                  {/* Diagnosis card */}
+                  {message.diagnosis && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getRiskBadge(message.riskLevel)}`}>
+                          {message.riskLevel} Risk
+                        </span>
+                        {message.diagnosis.severity && (
+                          <span className="text-xs text-gray-500">
+                            {message.diagnosis.severity} Severity
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="font-medium text-sm text-gray-900">{message.diagnosis.issue_title}</h4>
+                      {message.diagnosis.estimated_cost_range && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          Est. Cost: {message.diagnosis.estimated_cost_range}
+                        </p>
+                      )}
+                      {message.diagnosis.recommended_action && (
+                        <p className="text-xs text-blue-600 mt-2 flex items-start gap-1">
+                          <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                          {message.diagnosis.recommended_action}
+                        </p>
+                      )}
+                      {message.diagnosis.safety_warning && message.diagnosis.safety_warning !== 'None' && (
+                        <p className="text-xs text-red-600 mt-2 flex items-start gap-1">
+                          <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                          {message.diagnosis.safety_warning}
+                        </p>
+                      )}
+                      {message.diagnosis.can_diy && message.diagnosis.diy_instructions && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <p className="text-xs text-green-600 font-medium">✓ DIY Possible</p>
+                          <p className="text-xs text-gray-600 mt-1">{message.diagnosis.diy_instructions}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Audit result card */}
+                  {message.auditResult && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <ClipboardCheck className="w-4 h-4 text-green-600" />
+                        <span className="text-xs font-medium text-gray-700">
+                          {message.auditMode === 'move-in' ? 'Move-In Baseline' : 'Move-Out Report'}
+                        </span>
+                      </div>
+                      {message.auditResult.unit_summary && (
+                        <p className="text-xs text-gray-600">{message.auditResult.unit_summary}</p>
+                      )}
+                      {message.auditResult.existing_damage && message.auditResult.existing_damage.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs font-medium text-amber-600">
+                            {message.auditResult.existing_damage.length} pre-existing item(s) noted
+                          </p>
+                        </div>
+                      )}
+                      {message.auditResult.new_damages && message.auditResult.new_damages.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs font-medium text-red-600">
+                            {message.auditResult.new_damages.length} new damage(s) found
+                          </p>
+                          <ul className="mt-1 space-y-1">
+                            {message.auditResult.new_damages.slice(0, 3).map((damage, idx) => (
+                              <li key={idx} className="text-xs text-gray-600">
+                                • {damage.location}: {damage.description}
+                              </li>
+                            ))}
+                            {message.auditResult.new_damages.length > 3 && (
+                              <li className="text-xs text-gray-400">
+                                +{message.auditResult.new_damages.length - 3} more...
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                      {message.auditResult.total_estimated_deductions && (
+                        <p className="text-xs text-gray-700 mt-2 font-medium">
+                          Est. Deductions: {message.auditResult.total_estimated_deductions}
+                        </p>
+                      )}
+                      {message.auditResult.comparison_result && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Overall: {message.auditResult.comparison_result}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Typing indicator */}
+            {isLoading && !messages.some(m => m.isLoading) && (
+              <div className="flex justify-start">
+                <div className="bg-white rounded-2xl rounded-bl-md px-4 py-3 shadow-sm border border-gray-100">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full typing-dot" />
+                    <div className="w-2 h-2 bg-gray-400 rounded-full typing-dot" />
+                    <div className="w-2 h-2 bg-gray-400 rounded-full typing-dot" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Audit Panel */}
+          {showAuditPanel && (
+            <div className="p-4 bg-blue-50 border-t border-blue-100 flex-shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-gray-800">Video Audit</h4>
+                <button
+                  onClick={() => {
+                    setShowAuditPanel(false)
+                    clearVideo()
+                    setAuditMode(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Audit type selection */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => setAuditMode('move-in')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                    auditMode === 'move-in'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <Home className="w-3.5 h-3.5" />
+                  Move-In
+                </button>
+                <button
+                  onClick={() => setAuditMode('move-out')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                    auditMode === 'move-out'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <ClipboardCheck className="w-3.5 h-3.5" />
+                  Move-Out
+                </button>
+              </div>
+
+              {/* Unit ID input */}
+              <input
+                type="text"
+                value={unitId}
+                onChange={(e) => setUnitId(e.target.value)}
+                placeholder="Enter Unit ID (e.g., APT-101)"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+
+              {/* Video upload */}
+              <div className="mb-3">
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideoSelect}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => videoInputRef.current?.click()}
+                  className="w-full py-2.5 px-4 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-blue-400 hover:bg-white transition-colors flex items-center justify-center gap-2 bg-white/50"
+                >
+                  <Video className="w-4 h-4" />
+                  {selectedVideo ? selectedVideo.name : 'Select Video File'}
+                </button>
+              </div>
+
+              {/* Submit button */}
+              <button
+                onClick={submitVideoAudit}
+                disabled={!selectedVideo || !unitId.trim() || !auditMode || isLoading}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4" />
+                    Start Audit
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Image Preview */}
+          {imagePreview && (
+            <div className="px-4 py-2 bg-gray-100 border-t border-gray-200 flex-shrink-0">
+              <div className="relative inline-block">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="h-16 rounded-lg object-cover"
+                />
+                <button
+                  onClick={clearImage}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Input Area */}
+          <div className="p-3 bg-white border-t border-gray-200 flex-shrink-0">
+            <div className="flex items-end gap-2">
+              {/* Attachment buttons */}
+              <div className="flex gap-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Attach image"
+                >
+                  <Image className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setShowAuditPanel(!showAuditPanel)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    showAuditPanel
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
+                  }`}
+                  title="Video audit"
+                >
+                  <Video className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Text input */}
+              <div className="flex-1 relative">
+                <textarea
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Describe your issue..."
+                  rows={1}
+                  className="w-full px-4 py-2.5 pr-12 bg-gray-100 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
+                  style={{ maxHeight: '120px' }}
+                />
+              </div>
+
+              {/* Send button */}
+              <button
+                onClick={sendMessage}
+                disabled={(!inputValue.trim() && !selectedImage) || isLoading}
+                className="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Button */}
+      <button
+        onClick={isOpen ? closeWidget : openWidget}
+        className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-300 ${
+          isOpen
+            ? 'bg-gray-700 hover:bg-gray-800 rotate-0'
+            : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 fab-pulse'
+        }`}
+      >
+        {isOpen ? (
+          <ChevronDown className="w-6 h-6 text-white" />
+        ) : (
+          <MessageCircle className="w-6 h-6 text-white" />
+        )}
+      </button>
+    </div>
+  )
+}
+
+export default App
     }
   }
 
