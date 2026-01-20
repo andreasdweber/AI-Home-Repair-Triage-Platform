@@ -1,12 +1,19 @@
 """
 Fix-It AI - Maintenance Agent
 AI-powered maintenance triage and video audit capabilities using Google Gemini 2.0 Flash
+
+Features:
+- Smart triage with "Give Up" detection for escalation
+- Escalation mode to collect contact/access info
+- "Golden Ticket" vendor summary generation
+- Video audit with JSON-only output for damages
 """
 
 import os
 import json
 import tempfile
 import time
+import re
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -15,6 +22,17 @@ load_dotenv()
 
 # Gemini model configuration
 GEMINI_MODEL = "gemini-2.0-flash"
+
+# Phrases that trigger escalation mode ("Give Up" detector)
+GIVE_UP_PHRASES = [
+    "didn't work", "didnt work", "doesn't work", "doesnt work",
+    "not working", "still broken", "still not",
+    "call a pro", "call someone", "need a professional", "need professional",
+    "send someone", "get help", "give up", "i give up",
+    "forget it", "just fix it", "can't fix", "cant fix",
+    "too hard", "too complicated", "need a plumber", "need an electrician",
+    "need a technician", "escalate", "talk to human", "real person"
+]
 
 # System prompt for maintenance triage
 TRIAGE_SYSTEM_PROMPT = """You are a property maintenance expert. Your goal is to:
@@ -26,13 +44,25 @@ TRIAGE_SYSTEM_PROMPT = """You are a property maintenance expert. Your goal is to
 3. Provide a self-help fix if the issue is safe (Green/Yellow)
 4. Recommend professional help if needed
 
+Categorize issues into: Plumbing, Electrical, HVAC, Appliance, Structural, Pest Control, Locksmith, Other
+
 Be concise, helpful, and prioritize safety."""
+
+# System prompt for escalation mode
+ESCALATION_SYSTEM_PROMPT = """You are a helpful assistant collecting information to dispatch a maintenance professional.
+Be brief and friendly. Only ask for the specific information needed."""
 
 
 class MaintenanceAgent:
     """
     AI agent for maintenance issue triage and video auditing.
     Uses Google Gemini 2.0 Flash for multi-modal analysis.
+    
+    Features:
+    - "Give Up" detection to trigger escalation
+    - Escalation mode to collect contact/access info
+    - Vendor summary ("Golden Ticket") generation
+    - JSON-only video audit output
     """
     
     def __init__(self):
@@ -46,6 +76,103 @@ class MaintenanceAgent:
             model_name=GEMINI_MODEL,
             system_instruction=TRIAGE_SYSTEM_PROMPT
         )
+        self.escalation_model = genai.GenerativeModel(
+            model_name=GEMINI_MODEL,
+            system_instruction=ESCALATION_SYSTEM_PROMPT
+        )
+    
+    # ─────────────────────────────────────────────────────────────────────────────
+    # GIVE UP DETECTION & ESCALATION
+    # ─────────────────────────────────────────────────────────────────────────────
+    
+    def _detect_give_up(self, text: str) -> bool:
+        """Check if user message contains 'give up' phrases indicating they want escalation."""
+        if not text:
+            return False
+        text_lower = text.lower()
+        return any(phrase in text_lower for phrase in GIVE_UP_PHRASES)
+    
+    def _detect_escalation_info(self, history: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Check conversation history to see what escalation info has been collected.
+        Returns: {"has_phone": bool, "has_access": bool, "phone": str|None, "access": str|None}
+        """
+        collected = {"has_phone": False, "has_access": False, "phone": None, "access": None}
+        
+        # Look through history for patterns
+        full_text = " ".join([m.get("content", "") for m in history if m.get("role") == "user"])
+        
+        # Phone pattern (various formats)
+        phone_match = re.search(r'(\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\(\d{3}\)\s?\d{3}[-.\s]?\d{4})', full_text)
+        if phone_match:
+            collected["has_phone"] = True
+            collected["phone"] = phone_match.group(1)
+        
+        # Access code patterns
+        access_patterns = [
+            r'(?:key|code|access|gate|door)\s*(?:is|:)?\s*[#]?(\w+[-\w]*)',
+            r'(?:available|availability|free)\s*(?:is|:)?\s*(.+?)(?:\.|$)',
+        ]
+        for pattern in access_patterns:
+            match = re.search(pattern, full_text, re.IGNORECASE)
+            if match:
+                collected["has_access"] = True
+                collected["access"] = match.group(1).strip()
+                break
+        
+        return collected
+    
+    def _generate_vendor_summary(
+        self,
+        history: List[Dict[str, Any]],
+        contact_info: Dict[str, Any]
+    ) -> str:
+        """
+        Generate a concise "Golden Ticket" summary for the vendor.
+        Format: "Issue: X. DIY Attempted: Y. Parts: Z. Access: W. Contact: P"
+        """
+        conversation_text = self._format_history(history)
+        
+        prompt = f"""Based on this conversation, create a BRIEF vendor dispatch summary.
+
+CONVERSATION:
+{conversation_text}
+
+CONTACT INFO COLLECTED:
+Phone: {contact_info.get('phone', 'Not provided')}
+Access/Availability: {contact_info.get('access', 'Not provided')}
+
+Return ONLY valid JSON:
+{{
+    "issue": "Brief description of the problem",
+    "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other",
+    "diy_attempted": "What the tenant tried",
+    "likely_parts": "Parts that may be needed",
+    "summary": "One-line summary for vendor: Issue: X. DIY: Y. Parts: Z."
+}}"""
+        
+        try:
+            response = self.model.generate_content(prompt)
+            result = self._parse_json_response(response.text)
+            
+            # Build the golden ticket summary
+            summary = result.get("summary", "")
+            if not summary:
+                summary = f"Issue: {result.get('issue', 'Maintenance needed')}. "
+                if result.get('diy_attempted'):
+                    summary += f"DIY: {result['diy_attempted']}. "
+                if result.get('likely_parts'):
+                    summary += f"Parts: {result['likely_parts']}. "
+            
+            # Append contact info
+            if contact_info.get('access'):
+                summary += f"Access: {contact_info['access']}. "
+            if contact_info.get('phone'):
+                summary += f"Contact: {contact_info['phone']}"
+            
+            return summary.strip(), result.get("category", "Other")
+        except Exception:
+            return "Maintenance issue - tenant requested professional help.", "Other"
     
     # ─────────────────────────────────────────────────────────────────────────────
     # TRIAGE METHODS
@@ -64,7 +191,7 @@ class MaintenanceAgent:
             image_path: Optional path to an image file
         
         Returns:
-            Dict with: {"text": "response", "risk": "Green|Yellow|Red", "action": "Deflect|Escalate|Info"}
+            Dict with: {"text": "response", "risk": "Green|Yellow|Red", "action": "Deflect|Escalate|Info|CREATE_TICKET"}
         """
         prompt_parts = []
         
@@ -75,7 +202,7 @@ class MaintenanceAgent:
 {conversation_text}
 
 Return ONLY valid JSON:
-{{"text": "your response", "risk": "Green|Yellow|Red", "action": "Deflect|Escalate|Info"}}""")
+{{"text": "your response", "risk": "Green|Yellow|Red", "action": "Deflect|Escalate|Info", "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other"}}""")
         
         # Add image if provided
         if image_path and os.path.exists(image_path):
@@ -90,13 +217,15 @@ Return ONLY valid JSON:
             return {
                 "text": result.get("text", "Could you provide more details?"),
                 "risk": result.get("risk", "Yellow"),
-                "action": result.get("action", "Info")
+                "action": result.get("action", "Info"),
+                "category": result.get("category", "Other")
             }
         except Exception as e:
             return {
                 "text": "I encountered an issue. Please try again.",
                 "risk": "Yellow",
                 "action": "Info",
+                "category": "Other",
                 "error": str(e)
             }
     
@@ -104,19 +233,99 @@ Return ONLY valid JSON:
         self,
         history: List[Dict[str, Any]],
         image_data: Optional[bytes] = None,
-        image_mime_type: str = "image/jpeg"
+        image_mime_type: str = "image/jpeg",
+        escalation_mode: bool = False,
+        collected_info: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Triage using image bytes directly (for API uploads).
+        
+        Includes "Give Up" detection and escalation flow:
+        1. If user says "didn't work" / "call a pro" → switch to escalation mode
+        2. In escalation mode → ask for phone and access info
+        3. Once info collected → generate vendor summary and return CREATE_TICKET
         
         Args:
             history: Conversation history
             image_data: Raw image bytes
             image_mime_type: MIME type of image
+            escalation_mode: Whether we're already in escalation mode
+            collected_info: Previously collected contact/access info
         
         Returns:
-            Dict with: {"text": "...", "risk": "...", "action": "..."}
+            Dict with: {"text": "...", "risk": "...", "action": "...", "category": "...", 
+                       "escalation_mode": bool, "contact_info": {...}, "ticket_summary": "..."}
         """
+        collected_info = collected_info or {}
+        
+        # Get latest user message
+        latest_user_msg = ""
+        for msg in reversed(history):
+            if msg.get("role") == "user":
+                latest_user_msg = msg.get("content", "")
+                break
+        
+        # Check for "Give Up" trigger
+        if not escalation_mode and self._detect_give_up(latest_user_msg):
+            escalation_mode = True
+        
+        # ── ESCALATION MODE ──
+        if escalation_mode:
+            # Check what info we've collected
+            detected = self._detect_escalation_info(history)
+            
+            # Merge with previously collected
+            if detected["has_phone"]:
+                collected_info["phone"] = detected["phone"]
+            if detected["has_access"]:
+                collected_info["access"] = detected["access"]
+            
+            has_phone = bool(collected_info.get("phone"))
+            has_access = bool(collected_info.get("access"))
+            
+            # All info collected → CREATE TICKET
+            if has_phone and has_access:
+                summary, category = self._generate_vendor_summary(history, collected_info)
+                return {
+                    "text": f"✅ Got it! I'm creating a service ticket now.\n\n📋 **Ticket Summary:**\n{summary}\n\nA professional will contact you soon.",
+                    "risk": "Yellow",
+                    "action": "CREATE_TICKET",
+                    "category": category,
+                    "escalation_mode": False,
+                    "contact_info": collected_info,
+                    "ticket_summary": summary
+                }
+            
+            # Still need info → ask for it
+            if not has_phone and not has_access:
+                return {
+                    "text": "I understand - let me connect you with a professional. To create a service ticket, I need:\n\n1️⃣ **Your phone number** (so the technician can reach you)\n2️⃣ **Access info** (gate code, key location, or best times to visit)",
+                    "risk": "Yellow",
+                    "action": "Escalate",
+                    "category": "Other",
+                    "escalation_mode": True,
+                    "contact_info": collected_info
+                }
+            elif not has_phone:
+                return {
+                    "text": f"Thanks! Access info noted: **{collected_info.get('access')}**\n\nNow, what's the best phone number to reach you?",
+                    "risk": "Yellow",
+                    "action": "Escalate",
+                    "category": "Other",
+                    "escalation_mode": True,
+                    "contact_info": collected_info
+                }
+            else:  # not has_access
+                return {
+                    "text": f"Got your number: **{collected_info.get('phone')}**\n\nLastly, what's the access code or best time for the technician to visit?",
+                    "risk": "Yellow",
+                    "action": "Escalate",
+                    "category": "Other",
+                    "escalation_mode": True,
+                    "contact_info": collected_info
+                }
+        
+        # ── NORMAL TRIAGE MODE ──
         prompt_parts = []
         
         conversation_text = self._format_history(history)
@@ -125,7 +334,7 @@ Return ONLY valid JSON:
 {conversation_text}
 
 Return ONLY valid JSON:
-{{"text": "your response", "risk": "Green|Yellow|Red", "action": "Deflect|Escalate|Info"}}""")
+{{"text": "your response", "risk": "Green|Yellow|Red", "action": "Deflect|Escalate|Info", "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other"}}""")
         
         if image_data:
             prompt_parts.append({"mime_type": image_mime_type, "data": image_data})
@@ -136,13 +345,19 @@ Return ONLY valid JSON:
             return {
                 "text": result.get("text", "Could you provide more details?"),
                 "risk": result.get("risk", "Yellow"),
-                "action": result.get("action", "Info")
+                "action": result.get("action", "Info"),
+                "category": result.get("category", "Other"),
+                "escalation_mode": False,
+                "contact_info": {}
             }
         except Exception as e:
             return {
                 "text": "I encountered an issue. Please try again.",
                 "risk": "Yellow",
                 "action": "Info",
+                "category": "Other",
+                "escalation_mode": False,
+                "contact_info": {},
                 "error": str(e)
             }
     
@@ -154,44 +369,50 @@ Return ONLY valid JSON:
         self,
         video_path: str,
         mode: str,
-        baseline_text: Optional[str] = None
+        baseline_text: Optional[str] = None,
+        baseline_json: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
         """
         Audit a video for move-in or move-out inspection.
+        Returns structured JSON data (no markdown).
         
         Args:
             video_path: Path to video file
             mode: "move-in" or "move-out"
             baseline_text: For move-out, the move-in summary to compare against
+            baseline_json: For move-out, the structured baseline items
         
         Returns:
-            Dict with audit results
+            Dict with audit results including "items" array
         """
         if mode == "move-in":
             return self._audit_move_in(video_path)
         elif mode == "move-out":
-            return self._audit_move_out(video_path, baseline_text)
+            return self._audit_move_out(video_path, baseline_text, baseline_json)
         else:
-            return {"error": f"Invalid mode: {mode}. Use 'move-in' or 'move-out'."}
+            return {"success": False, "error": f"Invalid mode: {mode}. Use 'move-in' or 'move-out'."}
     
     def audit_video_bytes(
         self,
         video_data: bytes,
         video_mime_type: str,
         mode: str,
-        baseline_text: Optional[str] = None
+        baseline_text: Optional[str] = None,
+        baseline_json: Optional[List[Dict]] = None
     ) -> Dict[str, Any]:
         """
         Audit a video from bytes (for API uploads).
+        Returns structured JSON data (no markdown).
         
         Args:
             video_data: Raw video bytes
             video_mime_type: MIME type (e.g., "video/mp4")
             mode: "move-in" or "move-out"
             baseline_text: For move-out comparison
+            baseline_json: Structured baseline items
         
         Returns:
-            Dict with audit results
+            Dict with audit results including "items" array
         """
         # Save to temp file then process
         ext = self._get_video_extension(video_mime_type)
@@ -200,7 +421,7 @@ Return ONLY valid JSON:
             temp_path = f.name
         
         try:
-            return self.audit_video(temp_path, mode, baseline_text)
+            return self.audit_video(temp_path, mode, baseline_text, baseline_json)
         finally:
             try:
                 os.unlink(temp_path)
@@ -208,91 +429,130 @@ Return ONLY valid JSON:
                 pass
     
     def _audit_move_in(self, video_path: str) -> Dict[str, Any]:
-        """Generate baseline summary from move-in video."""
+        """
+        Generate baseline from move-in video.
+        Returns JSON array of items with conditions.
+        """
         video_file = None
         try:
             video_file = self._upload_video(video_path)
             
-            prompt = """Analyze this move-in inspection video. Create a detailed baseline record of:
-1. Each room/area shown
-2. Condition of walls, floors, ceilings
-3. Condition of fixtures, appliances, cabinets
-4. Any pre-existing damage or wear
-5. Overall cleanliness and condition
+            prompt = """Analyze this move-in inspection video. Document EVERY item you can see.
 
-Return ONLY valid JSON:
-{
-    "summary": "Detailed baseline description",
-    "rooms": ["list of rooms/areas inspected"],
-    "condition_notes": ["specific condition observations"],
-    "pre_existing_issues": ["any existing damage or wear noted"]
-}"""
+IMPORTANT: Return ONLY a valid JSON array. NO markdown, NO explanations, NO code blocks.
+
+Format (return this EXACT structure):
+[
+  {"item": "Living Room - North Wall", "condition": "Good - no damage", "room": "Living Room", "timestamp": "0:05"},
+  {"item": "Kitchen Counter", "condition": "Minor scratch near sink", "room": "Kitchen", "timestamp": "0:30"},
+  {"item": "Bathroom Mirror", "condition": "Clean, no cracks", "room": "Bathroom", "timestamp": "1:15"}
+]
+
+Document: walls, floors, ceilings, fixtures, appliances, cabinets, doors, windows, counters, etc.
+Note any pre-existing damage, wear, or issues.
+Include approximate timestamp when each item is visible.
+
+Return ONLY the JSON array, nothing else."""
             
             response = self.model.generate_content([video_file, prompt])
-            result = self._parse_json_response(response.text)
+            items = self._parse_json_array(response.text)
+            
+            # Generate summary from items
+            summary = f"Documented {len(items)} items. "
+            rooms = list(set(item.get("room", "Unknown") for item in items if item.get("room")))
+            if rooms:
+                summary += f"Rooms: {', '.join(rooms)}. "
+            
+            issues = [item for item in items if any(word in item.get("condition", "").lower() 
+                     for word in ["damage", "scratch", "stain", "crack", "worn", "broken", "missing"])]
+            if issues:
+                summary += f"Pre-existing issues: {len(issues)}."
+            else:
+                summary += "No significant pre-existing issues noted."
             
             return {
                 "success": True,
-                "summary": result.get("summary", response.text),
-                "rooms": result.get("rooms", []),
-                "condition_notes": result.get("condition_notes", []),
-                "pre_existing_issues": result.get("pre_existing_issues", [])
+                "items": items,
+                "summary": summary,
+                "rooms": rooms,
+                "pre_existing_issues": [i["item"] + ": " + i["condition"] for i in issues]
             }
             
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "items": []}
         finally:
             if video_file:
                 self._delete_video(video_file)
     
-    def _audit_move_out(self, video_path: str, baseline_text: Optional[str]) -> Dict[str, Any]:
-        """Compare move-out video against baseline."""
+    def _audit_move_out(
+        self,
+        video_path: str,
+        baseline_text: Optional[str],
+        baseline_json: Optional[List[Dict]] = None
+    ) -> Dict[str, Any]:
+        """
+        Compare move-out video against baseline.
+        Returns JSON array of items with damage assessment.
+        """
         video_file = None
         try:
             video_file = self._upload_video(video_path)
             
             baseline_context = ""
-            if baseline_text:
+            if baseline_json:
                 baseline_context = f"""
-MOVE-IN BASELINE:
+MOVE-IN BASELINE (compare against this):
+{json.dumps(baseline_json, indent=2)}
+"""
+            elif baseline_text:
+                baseline_context = f"""
+MOVE-IN BASELINE (compare against this):
 {baseline_text}
-
-Compare current condition against this baseline."""
+"""
             
             prompt = f"""Analyze this move-out inspection video.{baseline_context}
 
-Identify:
-1. Any new damage since move-in
-2. Wear beyond normal use
-3. Cleanliness issues
-4. Missing fixtures or items
-5. Areas requiring repair or cleaning
+IMPORTANT: Return ONLY a valid JSON array. NO markdown, NO explanations, NO code blocks.
 
-Return ONLY valid JSON:
-{{
-    "summary": "Overall assessment",
-    "new_damages": ["list of new damages found"],
-    "excessive_wear": ["wear beyond normal use"],
-    "cleaning_needed": ["areas needing cleaning"],
-    "deposit_deductions": ["recommended deductions with estimated costs"],
-    "total_estimated_cost": 0
-}}"""
+For EACH item visible, determine if there's NEW damage compared to move-in baseline.
+
+Format (return this EXACT structure):
+[
+  {{"item": "Living Room - North Wall", "condition": "Large hole near outlet", "is_new": true, "room": "Living Room", "timestamp": "0:10", "estimated_cost": 150}},
+  {{"item": "Kitchen Counter", "condition": "Same minor scratch as move-in", "is_new": false, "room": "Kitchen", "timestamp": "0:35", "estimated_cost": 0}},
+  {{"item": "Bathroom Mirror", "condition": "Cracked in corner", "is_new": true, "room": "Bathroom", "timestamp": "1:20", "estimated_cost": 75}}
+]
+
+Fields:
+- is_new: true if this is NEW damage not in baseline, false if pre-existing or normal wear
+- estimated_cost: Repair cost estimate in USD (0 if no damage or pre-existing)
+
+Return ONLY the JSON array, nothing else."""
             
             response = self.model.generate_content([video_file, prompt])
-            result = self._parse_json_response(response.text)
+            items = self._parse_json_array(response.text)
+            
+            # Calculate new damages and costs
+            new_damages = [i for i in items if i.get("is_new")]
+            total_cost = sum(i.get("estimated_cost", 0) for i in new_damages)
+            
+            # Generate summary
+            summary = f"Inspected {len(items)} items. "
+            if new_damages:
+                summary += f"Found {len(new_damages)} new damages. Total estimated cost: ${total_cost}."
+            else:
+                summary += "No new damages found beyond normal wear."
             
             return {
                 "success": True,
-                "summary": result.get("summary", response.text),
-                "new_damages": result.get("new_damages", []),
-                "excessive_wear": result.get("excessive_wear", []),
-                "cleaning_needed": result.get("cleaning_needed", []),
-                "deposit_deductions": result.get("deposit_deductions", []),
-                "total_estimated_cost": result.get("total_estimated_cost", 0)
+                "items": items,
+                "summary": summary,
+                "new_damages": [f"{i['item']}: {i['condition']} (${i.get('estimated_cost', 0)})" for i in new_damages],
+                "total_estimated_cost": total_cost
             }
             
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": str(e), "items": []}
         finally:
             if video_file:
                 self._delete_video(video_file)
@@ -363,7 +623,7 @@ Return ONLY valid JSON:
         return extensions.get(mime_type, ".mp4")
     
     def _parse_json_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse JSON from Gemini response."""
+        """Parse JSON object from Gemini response."""
         text = response_text.strip()
         
         # Remove markdown code blocks
@@ -379,3 +639,30 @@ Return ONLY valid JSON:
             return json.loads(text)
         except json.JSONDecodeError:
             return {"text": text}
+    
+    def _parse_json_array(self, response_text: str) -> List[Dict[str, Any]]:
+        """Parse JSON array from Gemini response (for audit results)."""
+        text = response_text.strip()
+        
+        # Remove markdown code blocks
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        
+        # Find the JSON array in the text
+        start = text.find('[')
+        end = text.rfind(']')
+        if start != -1 and end != -1 and end > start:
+            text = text[start:end + 1]
+        
+        try:
+            result = json.loads(text)
+            if isinstance(result, list):
+                return result
+            return []
+        except json.JSONDecodeError:
+            return []

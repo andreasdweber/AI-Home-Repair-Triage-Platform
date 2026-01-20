@@ -4,6 +4,7 @@ FastAPI backend with AI triage and video audit endpoints
 """
 
 import os
+import json
 from datetime import datetime
 from contextlib import contextmanager
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
@@ -77,26 +78,40 @@ async def health():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# POST /chat - Conversational Triage
+# POST /chat - Conversational Triage with Smart Dispatch
 # ─────────────────────────────────────────────────────────────────────────────
 
 @app.post("/chat")
 async def chat(
     session_id: str = Form(...),
     text: str = Form(""),
-    file: UploadFile = File(None)
+    file: UploadFile = File(None),
+    escalation_mode: bool = Form(False),
+    contact_info: str = Form("{}")
 ):
     """
-    Conversational chat endpoint for maintenance triage.
+    Conversational chat endpoint for maintenance triage with Smart Dispatch.
     
-    - Retrieves conversation history from DB (using session_id as ticket_id)
-    - Calls agent.triage() with history and optional image
-    - Saves updated conversation to DB
-    - Returns AI response with risk level and action
+    Features:
+    - "Give Up" detection triggers escalation mode
+    - Escalation mode collects phone/access info
+    - CREATE_TICKET action generates "Golden Ticket" summary
+    
+    Returns:
+    - response, risk, action, category
+    - escalation_mode: bool (if in escalation flow)
+    - contact_info: collected info
+    - ticket_id: if CREATE_TICKET action
+    - ticket_summary: "Golden Ticket" summary for vendor
     """
     
+    # Parse contact_info from JSON string
+    try:
+        collected_info = json.loads(contact_info) if contact_info else {}
+    except json.JSONDecodeError:
+        collected_info = {}
+    
     # Get or create ticket for this session
-    # session_id can be "s_<timestamp>" from widget or a numeric ticket ID
     ticket_id = None
     if session_id and session_id.isdigit():
         ticket_id = int(session_id)
@@ -107,7 +122,6 @@ async def chat(
             ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
         
         if not ticket:
-            # Create new ticket for this session
             ticket = Ticket(
                 name="Widget User",
                 phone="N/A",
@@ -116,9 +130,12 @@ async def chat(
             )
             db.add(ticket)
             db.flush()
-            ticket_id = ticket.id  # Get the new ticket ID
+            ticket_id = ticket.id
         
         history = ticket.conversation_history or []
+        # Get escalation state from ticket if stored
+        if ticket.contact_info:
+            collected_info = {**ticket.contact_info, **collected_info}
     
     # Add user message to history
     if text:
@@ -136,10 +153,16 @@ async def chat(
         image_mime_type = file.content_type
         history.append({"role": "user", "content": "[Image uploaded]"})
     
-    # Call agent
+    # Call agent with escalation context
     try:
         agent = MaintenanceAgent()
-        result = agent.triage_with_image_bytes(history, image_data, image_mime_type)
+        result = agent.triage_with_image_bytes(
+            history=history,
+            image_data=image_data,
+            image_mime_type=image_mime_type,
+            escalation_mode=escalation_mode,
+            collected_info=collected_info
+        )
     except Exception as e:
         raise HTTPException(500, f"AI error: {str(e)}")
     
@@ -147,23 +170,46 @@ async def chat(
     if result.get("text"):
         history.append({"role": "assistant", "content": result["text"]})
     
-    # Save to DB using the ticket_id we got/created earlier
+    # Save to DB
     with get_db() as db:
         ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
         if ticket:
             ticket.conversation_history = history
+            ticket.contact_info = result.get("contact_info", {})
+            
             if result.get("risk"):
                 ticket.risk_level = result["risk"]
-            if result.get("action") == "Escalate":
+                ticket.priority = result["risk"]
+            
+            if result.get("category"):
+                ticket.category = result["category"]
+            
+            # Handle CREATE_TICKET action (dispatch)
+            if result.get("action") == "CREATE_TICKET":
+                ticket.status = TicketStatus.DISPATCHED.value
+                ticket.summary = result.get("ticket_summary", "")
+                if result.get("contact_info", {}).get("phone"):
+                    ticket.phone = result["contact_info"]["phone"]
+            elif result.get("action") == "Escalate":
                 ticket.status = TicketStatus.ESCALATED.value
     
-    return {
+    response_data = {
         "session_id": str(ticket_id),
         "response": result.get("text"),
         "risk": result.get("risk"),
         "action": result.get("action"),
+        "category": result.get("category"),
+        "escalation_mode": result.get("escalation_mode", False),
+        "contact_info": result.get("contact_info", {}),
         "history": history
     }
+    
+    # Add ticket details if dispatched
+    if result.get("action") == "CREATE_TICKET":
+        response_data["ticket_id"] = ticket_id
+        response_data["ticket_summary"] = result.get("ticket_summary", "")
+    
+    return response_data
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -214,17 +260,20 @@ async def audit(
         except Exception as e:
             raise HTTPException(500, f"AI error: {str(e)}")
         
-        if result.get("success") and result.get("summary"):
+        if result.get("success"):
             with get_db() as db:
                 existing = db.query(UnitBaseline).filter(UnitBaseline.unit_id == unit_id).first()
                 
                 if existing:
-                    existing.move_in_video_summary = result["summary"]
+                    existing.move_in_video_summary = result.get("summary", "")
+                    existing.baseline_json = result.get("items", [])
                     existing.last_audit_date = datetime.utcnow()
+                    existing.last_updated = datetime.utcnow()
                 else:
                     baseline = UnitBaseline(
                         unit_id=unit_id,
-                        move_in_video_summary=result["summary"],
+                        move_in_video_summary=result.get("summary", ""),
+                        baseline_json=result.get("items", []),
                         last_audit_date=datetime.utcnow()
                     )
                     db.add(baseline)
@@ -239,8 +288,9 @@ async def audit(
         with get_db() as db:
             baseline = db.query(UnitBaseline).filter(UnitBaseline.unit_id == unit_id).first()
             baseline_text = baseline.move_in_video_summary if baseline else None
+            baseline_json = baseline.baseline_json if baseline else None
         
-        if not baseline_text:
+        if not baseline_text and not baseline_json:
             raise HTTPException(404, f"No move-in baseline found for unit '{unit_id}'")
         
         try:
@@ -248,7 +298,8 @@ async def audit(
                 video_data=video_data,
                 video_mime_type=video_mime_type,
                 mode="move-out",
-                baseline_text=baseline_text
+                baseline_text=baseline_text,
+                baseline_json=baseline_json
             )
         except Exception as e:
             raise HTTPException(500, f"AI error: {str(e)}")
