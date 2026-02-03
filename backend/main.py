@@ -210,7 +210,10 @@ async def chat(
         ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
         if ticket:
             ticket.conversation_history = history
-            ticket.contact_info = result.get("contact_info", {})
+            
+            # Store filled_slots as contact_info for backward compatibility
+            filled_slots = result.get("filled_slots", {})
+            ticket.contact_info = filled_slots
             
             if result.get("risk"):
                 ticket.risk_level = result["risk"]
@@ -219,14 +222,50 @@ async def chat(
             if result.get("category"):
                 ticket.category = result["category"]
             
-            # Handle CREATE_TICKET action (dispatch)
+            # Handle CREATE_TICKET action - save all ticket_data fields
             if result.get("action") == "CREATE_TICKET":
                 ticket.status = TicketStatus.DISPATCHED.value
-                ticket.summary = result.get("ticket_summary", "")
-                if result.get("contact_info", {}).get("phone"):
-                    ticket.phone = result["contact_info"]["phone"]
+                ticket_data = result.get("ticket_data", {})
+                
+                # Save tenant info
+                if ticket_data.get("tenant_name"):
+                    ticket.name = ticket_data["tenant_name"]
+                if ticket_data.get("unit"):
+                    ticket.unit_id = ticket_data["unit"]
+                if ticket_data.get("contact"):
+                    ticket.phone = ticket_data["contact"]
+                
+                # Save issue details
+                if ticket_data.get("issue"):
+                    ticket.issue_title = ticket_data["issue"]
+                if ticket_data.get("severity"):
+                    ticket.issue_description = f"Severity: {ticket_data['severity']}"
+                    if ticket_data.get("location"):
+                        ticket.issue_description += f" | Location: {ticket_data['location']}"
+                
+                # Generate summary for vendor ("Golden Ticket")
+                summary_parts = []
+                if ticket_data.get("issue"):
+                    summary_parts.append(f"Issue: {ticket_data['issue']}")
+                if ticket_data.get("severity"):
+                    summary_parts.append(f"Severity: {ticket_data['severity']}")
+                if ticket_data.get("location"):
+                    summary_parts.append(f"Location: {ticket_data['location']}")
+                if ticket_data.get("access"):
+                    summary_parts.append(f"Access: {ticket_data['access']}")
+                if ticket_data.get("contact"):
+                    summary_parts.append(f"Contact: {ticket_data['contact']}")
+                if ticket_data.get("unit"):
+                    summary_parts.append(f"Unit: {ticket_data['unit']}")
+                ticket.summary = " | ".join(summary_parts)
+                
+            elif result.get("action") == "CONFIRM":
+                # Awaiting user confirmation - don't create ticket yet
+                ticket.status = TicketStatus.OPEN.value
             elif result.get("action") == "Escalate":
                 ticket.status = TicketStatus.ESCALATED.value
+                if result.get("contact_info", {}).get("phone"):
+                    ticket.phone = result["contact_info"]["phone"]
     
     response_data = {
         "session_id": str(ticket_id),
@@ -236,6 +275,10 @@ async def chat(
         "category": result.get("category"),
         "escalation_mode": result.get("escalation_mode", False),
         "contact_info": result.get("contact_info", {}),
+        "filled_slots": result.get("filled_slots", {}),
+        "missing_info": result.get("missing_info", []),
+        "request_photo": result.get("request_photo", False),
+        "awaiting_confirmation": result.get("awaiting_confirmation", False),
         "history": history
     }
     
@@ -243,6 +286,7 @@ async def chat(
     if result.get("action") == "CREATE_TICKET":
         response_data["ticket_id"] = ticket_id
         response_data["ticket_summary"] = result.get("ticket_summary", "")
+        response_data["ticket_data"] = result.get("ticket_data", {})
     
     return response_data
 

@@ -48,9 +48,11 @@ GIVE_UP_PHRASES = [
 TRIAGE_SYSTEM_PROMPT = """You are Fix-It AI, a professional property management assistant. Your goal is NOT just to give advice, but to gather specific information to create a complete work order.
 
 The required "Slots" you must fill are:
+- TENANT_NAME: The tenant's name (e.g., "John Smith")
+- UNIT: Unit number or address (e.g., "Unit 4B", "123 Main St Apt 2")
 - ISSUE: What is broken? (e.g., "Leaking toilet hose")
 - SEVERITY: Is it happening right now? Is it damaging property? (e.g., "Slow drip," "Active spray")
-- LOCATION: Precise location? (e.g., "Behind toilet in master bathroom")
+- LOCATION: Precise location within the unit? (e.g., "Behind toilet in master bathroom")
 - ACCESS: Instructions for property entry? (e.g., "Use master key," "Schedule appointment")
 - CONTACT: Phone number or email to reach the tenant (e.g., "555-123-4567")
 
@@ -58,22 +60,31 @@ Your Logic Loop (Execute in order):
 
 1. Analyze Risk: If the issue indicates fire, gas, or massive flooding → Return Action EMERGENCY immediately.
 
-2. Check Slots: Look at the conversation history. Which of the 5 slots are still missing or vague?
+2. Check Slots: Look at the conversation history. Which of the 7 slots are still missing or vague?
 
-3. Formulate Response:
+3. Photo Request: For visual issues (leaks, damage, mold, pests, broken items), if no image has been uploaded, ask the user to upload a photo. Set "request_photo": true.
+
+4. Formulate Response:
    - If slots are missing: Ask ONE clear, direct question to fill the most critical missing slot. Do not give generic advice yet.
-   - Priority order: ISSUE → SEVERITY → LOCATION → ACCESS → CONTACT
+   - Priority order: TENANT_NAME → UNIT → ISSUE → SEVERITY → LOCATION → ACCESS → CONTACT
    - CONTACT must be an actual phone number or email, not just "contact me"
-   - If all 5 slots are filled with specific values: Return Action CREATE_TICKET.
+   - If all 7 slots are filled with specific values: Return Action CONFIRM (show summary for user confirmation)
+
+5. Confirmation: When action is CONFIRM, show a summary of all collected information and ask "Is this information correct?" 
+   - If user confirms (yes, correct, looks good, etc.) → Return Action CREATE_TICKET
+   - If user says no or wants to change something → Return Action QUESTION to fix the slot
 
 Output Format (JSON Only):
 {
     "text": "The question you are asking the user...",
     "risk": "Green" | "Yellow" | "Red",
-    "action": "QUESTION" | "CREATE_TICKET" | "EMERGENCY",
-    "missing_info": ["Contact", "Access"],
+    "action": "QUESTION" | "CONFIRM" | "CREATE_TICKET" | "EMERGENCY",
+    "request_photo": true | false,
+    "missing_info": ["Contact", "Access", "Unit", "Tenant_Name"],
     "category": "Plumbing" | "Electrical" | "HVAC" | "Appliance" | "Structural" | "Pest Control" | "Locksmith" | "Other",
     "filled_slots": {
+        "tenant_name": "extracted tenant name or null",
+        "unit": "extracted unit/address or null",
         "issue": "extracted issue or null",
         "severity": "extracted severity or null",
         "location": "extracted location or null",
@@ -87,7 +98,9 @@ IMPORTANT RULES:
 - Ask only ONE question at a time to fill the most critical missing slot.
 - Prioritize Severity questions for safety assessment.
 - CONTACT slot requires an actual phone number or email address - "call me" or "contact me" is NOT sufficient.
-- Only return CREATE_TICKET when ALL 5 slots have clear, specific values.
+- For visual issues without a photo, set request_photo to true and ask the user to upload one.
+- When ALL 7 slots are filled, return CONFIRM action with a summary for user to verify.
+- Only return CREATE_TICKET after user confirms the summary is correct.
 - Return EMERGENCY immediately for fire, gas leaks, or major flooding."""
 
 # System prompt for escalation mode
@@ -264,24 +277,34 @@ Return ONLY valid JSON:
 CONVERSATION:
 {conversation_text}
 
+IMAGE UPLOADED: {"Yes" if image_path else "No"}
+
 Analyze the conversation and:
 1. Check for EMERGENCY conditions (fire, gas, major flooding) → action: EMERGENCY
-2. Extract any filled slots (issue, severity, location, access)
-3. If slots are missing → action: QUESTION (ask ONE question for most critical missing slot)
-4. If all slots are filled → action: CREATE_TICKET
+2. Extract any filled slots (tenant_name, unit, issue, severity, location, access, contact)
+3. For visual issues without a photo, set request_photo: true
+4. If slots are missing → action: QUESTION (ask ONE question for most critical missing slot)
+5. If all 7 slots are filled → action: CONFIRM (show summary for user to verify)
+6. If user confirmed the summary → action: CREATE_TICKET
+
+IMPORTANT: CONTACT must be an actual phone number or email. "Contact me" or "call me" is NOT valid.
 
 Return ONLY valid JSON:
 {{
-    "text": "Your response to the user (a question if slots missing, or confirmation if complete)",
+    "text": "Your response to the user",
     "risk": "Green|Yellow|Red",
-    "action": "QUESTION|CREATE_TICKET|EMERGENCY",
-    "missing_info": ["list of missing slots: Issue, Severity, Location, Access"],
+    "action": "QUESTION|CONFIRM|CREATE_TICKET|EMERGENCY",
+    "request_photo": false,
+    "missing_info": ["list of missing slots"],
     "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other",
     "filled_slots": {{
+        "tenant_name": "extracted name or null",
+        "unit": "extracted unit/address or null",
         "issue": "extracted issue or null",
         "severity": "extracted severity or null",
         "location": "extracted location or null",
-        "access": "extracted access info or null"
+        "access": "extracted access info or null",
+        "contact": "extracted phone/email or null"
     }}
 }}""")
         
@@ -306,13 +329,31 @@ Return ONLY valid JSON:
                 "action": action,
                 "category": result.get("category", "Other"),
                 "missing_info": missing_info,
-                "filled_slots": filled_slots
+                "filled_slots": filled_slots,
+                "request_photo": result.get("request_photo", False)
             }
             
             # Handle CREATE_TICKET action - prepare for database save
             if action == "CREATE_TICKET":
                 response_data["ready_for_ticket"] = True
                 response_data["ticket_data"] = {
+                    "tenant_name": filled_slots.get("tenant_name"),
+                    "unit": filled_slots.get("unit"),
+                    "issue": filled_slots.get("issue"),
+                    "severity": filled_slots.get("severity"),
+                    "location": filled_slots.get("location"),
+                    "access": filled_slots.get("access"),
+                    "contact": filled_slots.get("contact"),
+                    "category": result.get("category", "Other"),
+                    "risk": result.get("risk", "Yellow")
+                }
+            
+            # Handle CONFIRM action - user needs to verify before ticket creation
+            if action == "CONFIRM":
+                response_data["awaiting_confirmation"] = True
+                response_data["ticket_data"] = {
+                    "tenant_name": filled_slots.get("tenant_name"),
+                    "unit": filled_slots.get("unit"),
                     "issue": filled_slots.get("issue"),
                     "severity": filled_slots.get("severity"),
                     "location": filled_slots.get("location"),
@@ -335,8 +376,9 @@ Return ONLY valid JSON:
                 "risk": "Yellow",
                 "action": "QUESTION",
                 "category": "Other",
-                "missing_info": ["Issue", "Severity", "Location", "Access", "Contact"],
+                "missing_info": ["Tenant_Name", "Unit", "Issue", "Severity", "Location", "Access", "Contact"],
                 "filled_slots": {},
+                "request_photo": False,
                 "error": str(e)
             }
     
@@ -440,32 +482,40 @@ Return ONLY valid JSON:
         prompt_parts = []
         
         conversation_text = self._format_history(history)
+        has_image = image_data is not None
         prompt_parts.append(f"""Analyze this maintenance conversation and determine what information is still needed.
 
 CONVERSATION:
 {conversation_text}
 
+IMAGE UPLOADED: {"Yes" if has_image else "No"}
+
 Analyze the conversation and:
 1. Check for EMERGENCY conditions (fire, gas, major flooding) → action: EMERGENCY
-2. Extract any filled slots (issue, severity, location, access, contact)
-3. If slots are missing → action: QUESTION (ask ONE question for most critical missing slot)
-4. If all 5 slots are filled with specific values → action: CREATE_TICKET
+2. Extract any filled slots (tenant_name, unit, issue, severity, location, access, contact)
+3. For visual issues without a photo, set request_photo: true
+4. If slots are missing → action: QUESTION (ask ONE question for most critical missing slot)
+5. If all 7 slots are filled → action: CONFIRM (show summary for user to verify)
+6. If user confirmed the summary → action: CREATE_TICKET
 
-IMPORTANT: The CONTACT slot requires an actual phone number or email address. "Contact me" or "call me" is NOT a valid contact - you must ask for their phone number or email.
+IMPORTANT: CONTACT must be an actual phone number or email. "Contact me" or "call me" is NOT valid.
 
 Return ONLY valid JSON:
 {{
-    "text": "Your response to the user (a question if slots missing, or confirmation if complete)",
+    "text": "Your response to the user",
     "risk": "Green|Yellow|Red",
-    "action": "QUESTION|CREATE_TICKET|EMERGENCY",
-    "missing_info": ["list of missing slots: Issue, Severity, Location, Access, Contact"],
+    "action": "QUESTION|CONFIRM|CREATE_TICKET|EMERGENCY",
+    "request_photo": false,
+    "missing_info": ["list of missing slots"],
     "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other",
     "filled_slots": {{
+        "tenant_name": "extracted name or null",
+        "unit": "extracted unit/address or null",
         "issue": "extracted issue or null",
         "severity": "extracted severity or null",
         "location": "extracted location or null",
         "access": "extracted access info or null",
-        "contact": "extracted phone number or email or null"
+        "contact": "extracted phone/email or null"
     }}
 }}""")
         
@@ -488,13 +538,31 @@ Return ONLY valid JSON:
                 "missing_info": missing_info,
                 "filled_slots": filled_slots,
                 "escalation_mode": False,
-                "contact_info": {}
+                "contact_info": {},
+                "request_photo": result.get("request_photo", False)
             }
             
             # Handle CREATE_TICKET action - prepare for database save
             if action == "CREATE_TICKET":
                 response_data["ready_for_ticket"] = True
                 response_data["ticket_data"] = {
+                    "tenant_name": filled_slots.get("tenant_name"),
+                    "unit": filled_slots.get("unit"),
+                    "issue": filled_slots.get("issue"),
+                    "severity": filled_slots.get("severity"),
+                    "location": filled_slots.get("location"),
+                    "access": filled_slots.get("access"),
+                    "contact": filled_slots.get("contact"),
+                    "category": result.get("category", "Other"),
+                    "risk": result.get("risk", "Yellow")
+                }
+            
+            # Handle CONFIRM action - user needs to verify before ticket creation
+            if action == "CONFIRM":
+                response_data["awaiting_confirmation"] = True
+                response_data["ticket_data"] = {
+                    "tenant_name": filled_slots.get("tenant_name"),
+                    "unit": filled_slots.get("unit"),
                     "issue": filled_slots.get("issue"),
                     "severity": filled_slots.get("severity"),
                     "location": filled_slots.get("location"),
@@ -517,10 +585,11 @@ Return ONLY valid JSON:
                 "risk": "Yellow",
                 "action": "QUESTION",
                 "category": "Other",
-                "missing_info": ["Issue", "Severity", "Location", "Access", "Contact"],
+                "missing_info": ["Tenant_Name", "Unit", "Issue", "Severity", "Location", "Access", "Contact"],
                 "filled_slots": {},
                 "escalation_mode": False,
                 "contact_info": {},
+                "request_photo": False,
                 "error": str(e)
             }
     
