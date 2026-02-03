@@ -387,6 +387,128 @@ async def audit(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ADMIN ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+ADMIN_KEY = os.getenv("ADMIN_KEY", "demo-admin-key")
+
+@app.get("/admin/verify")
+async def admin_verify(key: str = ""):
+    """Verify admin key."""
+    if key == ADMIN_KEY:
+        return {"valid": True}
+    raise HTTPException(401, "Invalid admin key")
+
+
+@app.get("/admin/tickets")
+async def admin_get_tickets():
+    """Get all tickets with stats for admin dashboard."""
+    with get_db() as db:
+        tickets = db.query(Ticket).order_by(Ticket.id.desc()).all()
+        
+        # Calculate stats
+        total = len(tickets)
+        open_count = sum(1 for t in tickets if t.status in [None, 'Open', TicketStatus.OPEN.value])
+        dispatched = sum(1 for t in tickets if t.status == TicketStatus.DISPATCHED.value)
+        emergency = sum(1 for t in tickets if t.priority == 'Red' or t.risk_level == 'Red')
+        
+        # Serialize tickets
+        tickets_data = []
+        for t in tickets:
+            tickets_data.append({
+                "id": t.id,
+                "name": t.name,
+                "phone": t.phone,
+                "unit_id": t.unit_id,
+                "category": t.category,
+                "issue_title": t.issue_title,
+                "issue_description": t.issue_description,
+                "status": t.status,
+                "priority": t.priority or t.risk_level,
+                "summary": t.summary,
+                "contact_info": t.contact_info,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "updated_at": t.updated_at.isoformat() if t.updated_at else None
+            })
+        
+        return {
+            "tickets": tickets_data,
+            "stats": {
+                "total": total,
+                "open": open_count,
+                "dispatched": dispatched,
+                "emergency": emergency
+            }
+        }
+
+
+@app.get("/admin/tickets/{ticket_id}")
+async def admin_get_ticket(ticket_id: int):
+    """Get single ticket with full conversation history."""
+    with get_db() as db:
+        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+        if not ticket:
+            raise HTTPException(404, "Ticket not found")
+        
+        return {
+            "id": ticket.id,
+            "name": ticket.name,
+            "phone": ticket.phone,
+            "postal_code": ticket.postal_code,
+            "unit_id": ticket.unit_id,
+            "category": ticket.category,
+            "issue_title": ticket.issue_title,
+            "issue_description": ticket.issue_description,
+            "status": ticket.status,
+            "priority": ticket.priority or ticket.risk_level,
+            "summary": ticket.summary,
+            "contact_info": ticket.contact_info,
+            "conversation_history": ticket.conversation_history,
+            "ai_diagnosis": ticket.ai_diagnosis,
+            "ai_recommended_action": ticket.ai_recommended_action,
+            "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
+            "updated_at": ticket.updated_at.isoformat() if ticket.updated_at else None
+        }
+
+
+@app.get("/admin/units")
+async def admin_get_units():
+    """Get all units with baselines."""
+    with get_db() as db:
+        units = db.query(UnitBaseline).all()
+        
+        units_data = []
+        for u in units:
+            units_data.append({
+                "id": u.id,
+                "unit_id": u.unit_id,
+                "has_baseline": bool(u.move_in_video_summary or u.baseline_json),
+                "summary": u.move_in_video_summary,
+                "items_count": len(u.baseline_json) if u.baseline_json else 0,
+                "last_updated": u.last_updated.isoformat() if u.last_updated else None
+            })
+        
+        return {"units": units_data}
+
+
+@app.patch("/admin/tickets/{ticket_id}")
+async def admin_update_ticket(ticket_id: int, status: str = None, priority: str = None):
+    """Update ticket status or priority."""
+    with get_db() as db:
+        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+        if not ticket:
+            raise HTTPException(404, "Ticket not found")
+        
+        if status:
+            ticket.status = status
+        if priority:
+            ticket.priority = priority
+            ticket.risk_level = priority
+        
+        return {"success": True, "ticket_id": ticket_id}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────────────────────────────────────
 
