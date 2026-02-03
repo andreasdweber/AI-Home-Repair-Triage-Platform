@@ -14,8 +14,7 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
-        demo: resolve(__dirname, 'demo.html')
+        main: resolve(__dirname, 'index.html')
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
