@@ -44,19 +44,46 @@ GIVE_UP_PHRASES = [
     "need a technician", "escalate", "talk to human", "real person"
 ]
 
-# System prompt for maintenance triage
-TRIAGE_SYSTEM_PROMPT = """You are a property maintenance expert. Your goal is to:
-1. Identify the maintenance issue from the description and/or image
-2. Assess safety risks using this scale:
-   - Green: Safe, minor issue, tenant can likely fix themselves
-   - Yellow: Moderate concern, should be addressed soon, may need professional
-   - Red: Urgent safety hazard, requires immediate professional attention
-3. Provide a self-help fix if the issue is safe (Green/Yellow)
-4. Recommend professional help if needed
+# System prompt for maintenance triage - Slot-Filling State Machine
+TRIAGE_SYSTEM_PROMPT = """You are Fix-It AI, a professional property management assistant. Your goal is NOT just to give advice, but to gather specific information to create a complete work order.
 
-Categorize issues into: Plumbing, Electrical, HVAC, Appliance, Structural, Pest Control, Locksmith, Other
+The required "Slots" you must fill are:
+- ISSUE: What is broken? (e.g., "Leaking window")
+- SEVERITY: Is it happening right now? Is it damaging property? (e.g., "Active dripping," "Soaking carpet")
+- LOCATION: Precise location? (e.g., "Living room, top frame")
+- ACCESS: Instructions for entry? (e.g., "Key at desk," "Call first")
 
-Be concise, helpful, and prioritize safety."""
+Your Logic Loop (Execute in order):
+
+1. Analyze Risk: If the issue indicates fire, gas, or massive flooding → Return Action EMERGENCY immediately.
+
+2. Check Slots: Look at the conversation history. Which of the 4 slots are still missing or vague?
+
+3. Formulate Response:
+   - If slots are missing: Ask ONE clear, direct question to fill the most critical missing slot. (e.g., "Is water dripping onto the floor right now?" or "Do we have permission to enter with a master key?"). Do not give generic advice yet.
+   - If all slots are filled: Return Action CREATE_TICKET.
+
+Output Format (JSON Only):
+{
+    "text": "The question you are asking the user...",
+    "risk": "Green" | "Yellow" | "Red",
+    "action": "QUESTION" | "CREATE_TICKET" | "EMERGENCY",
+    "missing_info": ["Access", "Severity"],
+    "category": "Plumbing" | "Electrical" | "HVAC" | "Appliance" | "Structural" | "Pest Control" | "Locksmith" | "Other",
+    "filled_slots": {
+        "issue": "extracted issue or null",
+        "severity": "extracted severity or null",
+        "location": "extracted location or null",
+        "access": "extracted access info or null"
+    }
+}
+
+IMPORTANT RULES:
+- NEVER give generic advice when slots are missing. Your job is to ASK QUESTIONS.
+- Ask only ONE question at a time to fill the most critical missing slot.
+- Prioritize Severity questions for safety assessment.
+- Only return CREATE_TICKET when ALL 4 slots have clear values.
+- Return EMERGENCY immediately for fire, gas leaks, or major flooding."""
 
 # System prompt for escalation mode
 ESCALATION_SYSTEM_PROMPT = """You are a helpful assistant collecting information to dispatch a maintenance professional.
@@ -212,24 +239,46 @@ Return ONLY valid JSON:
     ) -> Dict[str, Any]:
         """
         Triage a maintenance issue using conversation history and optional image.
+        Uses Slot-Filling State Machine logic to gather complete information.
         
         Args:
             history: List of conversation messages [{"role": "user"|"assistant", "content": "..."}]
             image_path: Optional path to an image file
         
         Returns:
-            Dict with: {"text": "response", "risk": "Green|Yellow|Red", "action": "Deflect|Escalate|Info|CREATE_TICKET"}
+            Dict with: {"text": "response", "risk": "Green|Yellow|Red", 
+                       "action": "QUESTION|CREATE_TICKET|EMERGENCY",
+                       "missing_info": [...], "filled_slots": {...}}
         """
         prompt_parts = []
         
         # Build prompt from conversation history
         conversation_text = self._format_history(history)
-        prompt_parts.append(f"""Analyze this maintenance issue:
+        prompt_parts.append(f"""Analyze this maintenance conversation and determine what information is still needed.
 
+CONVERSATION:
 {conversation_text}
 
+Analyze the conversation and:
+1. Check for EMERGENCY conditions (fire, gas, major flooding) → action: EMERGENCY
+2. Extract any filled slots (issue, severity, location, access)
+3. If slots are missing → action: QUESTION (ask ONE question for most critical missing slot)
+4. If all slots are filled → action: CREATE_TICKET
+
 Return ONLY valid JSON:
-{{"text": "your response", "risk": "Green|Yellow|Red", "action": "Deflect|Escalate|Info", "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other"}}""")
+{{
+    "text": "Your response to the user (a question if slots missing, or confirmation if complete)",
+    "risk": "Green|Yellow|Red",
+    "action": "QUESTION|CREATE_TICKET|EMERGENCY",
+    "missing_info": ["list of missing slots: Issue, Severity, Location, Access"],
+    "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other",
+    "filled_slots": {{
+        "issue": "extracted issue or null",
+        "severity": "extracted severity or null",
+        "location": "extracted location or null",
+        "access": "extracted access info or null"
+    }}
+}}""")
         
         # Add image if provided
         if image_path and os.path.exists(image_path):
@@ -241,18 +290,47 @@ Return ONLY valid JSON:
         try:
             response = self.model.generate_content(prompt_parts)
             result = self._parse_json_response(response.text)
-            return {
-                "text": result.get("text", "Could you provide more details?"),
+            
+            action = result.get("action", "QUESTION")
+            missing_info = result.get("missing_info", [])
+            filled_slots = result.get("filled_slots", {})
+            
+            response_data = {
+                "text": result.get("text", "Could you provide more details about the issue?"),
                 "risk": result.get("risk", "Yellow"),
-                "action": result.get("action", "Info"),
-                "category": result.get("category", "Other")
+                "action": action,
+                "category": result.get("category", "Other"),
+                "missing_info": missing_info,
+                "filled_slots": filled_slots
             }
+            
+            # Handle CREATE_TICKET action - prepare for database save
+            if action == "CREATE_TICKET":
+                response_data["ready_for_ticket"] = True
+                response_data["ticket_data"] = {
+                    "issue": filled_slots.get("issue"),
+                    "severity": filled_slots.get("severity"),
+                    "location": filled_slots.get("location"),
+                    "access": filled_slots.get("access"),
+                    "category": result.get("category", "Other"),
+                    "risk": result.get("risk", "Yellow")
+                }
+            
+            # Handle EMERGENCY action
+            if action == "EMERGENCY":
+                response_data["is_emergency"] = True
+                response_data["text"] = f"🚨 EMERGENCY: {result.get('text', 'This is an emergency situation. Please evacuate if necessary and call emergency services.')}"
+            
+            return response_data
+            
         except Exception as e:
             return {
                 "text": "I encountered an issue. Please try again.",
                 "risk": "Yellow",
-                "action": "Info",
+                "action": "QUESTION",
                 "category": "Other",
+                "missing_info": ["Issue", "Severity", "Location", "Access"],
+                "filled_slots": {},
                 "error": str(e)
             }
     
@@ -352,16 +430,35 @@ Return ONLY valid JSON:
                     "contact_info": collected_info
                 }
         
-        # ── NORMAL TRIAGE MODE ──
+        # ── NORMAL TRIAGE MODE (Slot-Filling State Machine) ──
         prompt_parts = []
         
         conversation_text = self._format_history(history)
-        prompt_parts.append(f"""Analyze this maintenance issue:
+        prompt_parts.append(f"""Analyze this maintenance conversation and determine what information is still needed.
 
+CONVERSATION:
 {conversation_text}
 
+Analyze the conversation and:
+1. Check for EMERGENCY conditions (fire, gas, major flooding) → action: EMERGENCY
+2. Extract any filled slots (issue, severity, location, access)
+3. If slots are missing → action: QUESTION (ask ONE question for most critical missing slot)
+4. If all slots are filled → action: CREATE_TICKET
+
 Return ONLY valid JSON:
-{{"text": "your response", "risk": "Green|Yellow|Red", "action": "Deflect|Escalate|Info", "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other"}}""")
+{{
+    "text": "Your response to the user (a question if slots missing, or confirmation if complete)",
+    "risk": "Green|Yellow|Red",
+    "action": "QUESTION|CREATE_TICKET|EMERGENCY",
+    "missing_info": ["list of missing slots: Issue, Severity, Location, Access"],
+    "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other",
+    "filled_slots": {{
+        "issue": "extracted issue or null",
+        "severity": "extracted severity or null",
+        "location": "extracted location or null",
+        "access": "extracted access info or null"
+    }}
+}}""")
         
         if image_data:
             prompt_parts.append({"mime_type": image_mime_type, "data": image_data})
@@ -369,20 +466,49 @@ Return ONLY valid JSON:
         try:
             response = self.model.generate_content(prompt_parts)
             result = self._parse_json_response(response.text)
-            return {
-                "text": result.get("text", "Could you provide more details?"),
+            
+            action = result.get("action", "QUESTION")
+            missing_info = result.get("missing_info", [])
+            filled_slots = result.get("filled_slots", {})
+            
+            response_data = {
+                "text": result.get("text", "Could you provide more details about the issue?"),
                 "risk": result.get("risk", "Yellow"),
-                "action": result.get("action", "Info"),
+                "action": action,
                 "category": result.get("category", "Other"),
+                "missing_info": missing_info,
+                "filled_slots": filled_slots,
                 "escalation_mode": False,
                 "contact_info": {}
             }
+            
+            # Handle CREATE_TICKET action - prepare for database save
+            if action == "CREATE_TICKET":
+                response_data["ready_for_ticket"] = True
+                response_data["ticket_data"] = {
+                    "issue": filled_slots.get("issue"),
+                    "severity": filled_slots.get("severity"),
+                    "location": filled_slots.get("location"),
+                    "access": filled_slots.get("access"),
+                    "category": result.get("category", "Other"),
+                    "risk": result.get("risk", "Yellow")
+                }
+            
+            # Handle EMERGENCY action
+            if action == "EMERGENCY":
+                response_data["is_emergency"] = True
+                response_data["text"] = f"🚨 EMERGENCY: {result.get('text', 'This is an emergency situation. Please evacuate if necessary and call emergency services.')}"
+            
+            return response_data
+            
         except Exception as e:
             return {
                 "text": "I encountered an issue. Please try again.",
                 "risk": "Yellow",
-                "action": "Info",
+                "action": "QUESTION",
                 "category": "Other",
+                "missing_info": ["Issue", "Severity", "Location", "Access"],
+                "filled_slots": {},
                 "escalation_mode": False,
                 "contact_info": {},
                 "error": str(e)
