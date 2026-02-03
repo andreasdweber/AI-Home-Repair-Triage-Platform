@@ -24,6 +24,11 @@ export default function AdminPortal() {
   const [auditFile, setAuditFile] = useState(null)
   const [auditResults, setAuditResults] = useState(null)
   const [auditLoading, setAuditLoading] = useState(false)
+  const [auditProgress, setAuditProgress] = useState('') // 'uploading' | 'processing' | 'analyzing'
+  const [auditError, setAuditError] = useState('')
+  
+  const MAX_VIDEO_SIZE_MB = 100
+  const MAX_VIDEO_SIZE_BYTES = MAX_VIDEO_SIZE_MB * 1024 * 1024
   
   // Selected ticket for detail view
   const [selectedTicket, setSelectedTicket] = useState(null)
@@ -67,9 +72,21 @@ export default function AdminPortal() {
   // ─────────────────────────────────────────────────────────────────────────────
   const handleAuditFileSelect = (e) => {
     const selectedFile = e.target.files[0]
-    if (selectedFile && selectedFile.type.startsWith('video/')) {
-      setAuditFile(selectedFile)
+    setAuditError('')
+    
+    if (!selectedFile) return
+    
+    if (!selectedFile.type.startsWith('video/')) {
+      setAuditError('Please select a video file (MP4, MOV, WebM)')
+      return
     }
+    
+    if (selectedFile.size > MAX_VIDEO_SIZE_BYTES) {
+      setAuditError(`Video must be under ${MAX_VIDEO_SIZE_MB}MB. Selected: ${(selectedFile.size / 1024 / 1024).toFixed(1)}MB`)
+      return
+    }
+    
+    setAuditFile(selectedFile)
   }
 
   const startAudit = async () => {
@@ -77,12 +94,18 @@ export default function AdminPortal() {
 
     setAuditLoading(true)
     setAuditResults(null)
+    setAuditError('')
+    setAuditProgress('uploading')
 
     try {
       const formData = new FormData()
-      formData.append('unit_id', unitId)
+      formData.append('unit_id', unitId.trim().toUpperCase()) // Normalize unit ID
       formData.append('mode', auditType)
       formData.append('file', auditFile)
+      
+      // Simulate upload progress then switch to processing
+      setTimeout(() => setAuditProgress('processing'), 1500)
+      setTimeout(() => setAuditProgress('analyzing'), 5000)
 
       const res = await fetch(`${API_URL}/audit`, {
         method: 'POST',
@@ -95,12 +118,13 @@ export default function AdminPortal() {
         // Refresh units list to show new baseline
         loadData()
       } else {
-        setAuditResults({ error: data.error || data.detail || 'Audit failed' })
+        setAuditError(data.error || data.detail || 'Audit failed. Please try again.')
       }
     } catch (err) {
-      setAuditResults({ error: 'Error connecting to server. Please try again.' })
+      setAuditError('Error connecting to server. Please try again.')
     } finally {
       setAuditLoading(false)
+      setAuditProgress('')
     }
   }
 
@@ -109,6 +133,8 @@ export default function AdminPortal() {
     setUnitId('')
     setAuditType(null)
     setAuditResults(null)
+    setAuditError('')
+    setAuditProgress('')
     if (auditFileInputRef.current) auditFileInputRef.current.value = ''
   }
 
@@ -438,7 +464,11 @@ export default function AdminPortal() {
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <div className="text-3xl mb-1">📥</div>
+                  <div className="w-10 h-10 mx-auto mb-2 bg-blue-100 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                    </svg>
+                  </div>
                   <div className="font-medium">Move-In</div>
                   <div className="text-xs text-gray-500">Create baseline</div>
                 </button>
@@ -450,7 +480,11 @@ export default function AdminPortal() {
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <div className="text-3xl mb-1">📤</div>
+                  <div className="w-10 h-10 mx-auto mb-2 bg-purple-100 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </div>
                   <div className="font-medium">Move-Out</div>
                   <div className="text-xs text-gray-500">Compare damages</div>
                 </button>
@@ -509,8 +543,18 @@ export default function AdminPortal() {
                     </svg>
                   </div>
                   <div className="text-sm text-gray-600">Click to upload video</div>
-                  <div className="text-xs text-gray-400">MP4, MOV, WebM</div>
+                  <div className="text-xs text-gray-400">MP4, MOV, WebM (max {MAX_VIDEO_SIZE_MB}MB)</div>
                 </button>
+              )}
+              
+              {/* Error Message */}
+              {auditError && (
+                <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-center gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {auditError}
+                </div>
               )}
             </div>
 
@@ -530,12 +574,26 @@ export default function AdminPortal() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Processing Video...
+                  {auditProgress === 'uploading' && 'Uploading video...'}
+                  {auditProgress === 'processing' && 'Processing video...'}
+                  {auditProgress === 'analyzing' && 'AI analyzing...'}
+                  {!auditProgress && 'Processing...'}
                 </span>
               ) : (
                 `Start ${auditType === 'move-out' ? 'Move-Out' : 'Move-In'} Audit`
               )}
             </button>
+            
+            {/* Progress Steps */}
+            {auditLoading && (
+              <div className="flex items-center justify-center gap-2 text-xs text-gray-500 mt-3">
+                <span className={auditProgress === 'uploading' ? 'text-blue-600 font-medium' : auditProgress ? 'text-green-600' : 'text-gray-400'}>Upload</span>
+                <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                <span className={auditProgress === 'processing' ? 'text-blue-600 font-medium' : auditProgress === 'analyzing' ? 'text-green-600' : 'text-gray-400'}>Process</span>
+                <svg className="w-3 h-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                <span className={auditProgress === 'analyzing' ? 'text-blue-600 font-medium' : 'text-gray-400'}>Analyze</span>
+              </div>
+            )}
           </div>
         )}
       </div>

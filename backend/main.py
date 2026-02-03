@@ -314,6 +314,9 @@ async def audit(
         - Returns new damages report
     """
     
+    # Normalize unit_id to uppercase for consistent matching
+    unit_id = unit_id.strip().upper()
+    
     # Validate mode
     if mode not in ["move-in", "move-out"]:
         raise HTTPException(400, "mode must be 'move-in' or 'move-out'")
