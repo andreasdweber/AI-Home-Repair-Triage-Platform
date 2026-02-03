@@ -11,9 +11,6 @@ export default function AdminPortal() {
   // STATE
   // ─────────────────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [adminKey, setAdminKey] = useState('')
-  const [authError, setAuthError] = useState('')
   
   // Data state
   const [tickets, setTickets] = useState([])
@@ -33,42 +30,9 @@ export default function AdminPortal() {
   
   const auditFileInputRef = useRef(null)
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // AUTH
-  // ─────────────────────────────────────────────────────────────────────────────
-  const handleLogin = async () => {
-    setAuthError('')
-    try {
-      const res = await fetch(`${API_URL}/admin/verify?key=${encodeURIComponent(adminKey)}`)
-      if (res.ok) {
-        setIsAuthenticated(true)
-        localStorage.setItem('adminKey', adminKey)
-        loadData()
-      } else {
-        setAuthError('Invalid admin key')
-      }
-    } catch (err) {
-      // If endpoint doesn't exist, allow access with any key for demo
-      setIsAuthenticated(true)
-      localStorage.setItem('adminKey', adminKey)
-      loadData()
-    }
-  }
-
-  const handleLogout = () => {
-    setIsAuthenticated(false)
-    setAdminKey('')
-    localStorage.removeItem('adminKey')
-  }
-
-  // Check for saved auth on mount
+  // Load data on mount
   useEffect(() => {
-    const savedKey = localStorage.getItem('adminKey')
-    if (savedKey) {
-      setAdminKey(savedKey)
-      setIsAuthenticated(true)
-      loadData()
-    }
+    loadData()
   }, [])
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -146,55 +110,6 @@ export default function AdminPortal() {
     setAuditType(null)
     setAuditResults(null)
     if (auditFileInputRef.current) auditFileInputRef.current.value = ''
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // RENDER: LOGIN
-  // ─────────────────────────────────────────────────────────────────────────────
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
-          <div className="text-center mb-6">
-            <span className="text-4xl">🔧</span>
-            <h1 className="text-2xl font-bold text-gray-800 mt-2">Fix-It AI Admin</h1>
-            <p className="text-gray-500 text-sm">Property Management Portal</p>
-          </div>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Admin Key
-              </label>
-              <input
-                type="password"
-                value={adminKey}
-                onChange={(e) => setAdminKey(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                placeholder="Enter your admin key"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            
-            {authError && (
-              <p className="text-red-600 text-sm">{authError}</p>
-            )}
-            
-            <button
-              onClick={handleLogin}
-              disabled={!adminKey.trim()}
-              className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            >
-              Sign In
-            </button>
-          </div>
-          
-          <p className="text-xs text-gray-400 text-center mt-6">
-            Contact your administrator for access credentials
-          </p>
-        </div>
-      </div>
-    )
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -645,12 +560,6 @@ export default function AdminPortal() {
               <span className="text-2xl">🔧</span>
               <h1 className="text-xl font-bold text-gray-800">Fix-It AI Admin</h1>
             </div>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              Sign Out
-            </button>
           </div>
         </div>
       </header>
