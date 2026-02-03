@@ -125,7 +125,11 @@ export default function AdminPortal() {
               <p className="text-sm text-gray-500">Total Tickets</p>
               <p className="text-3xl font-bold text-gray-800">{stats.total}</p>
             </div>
-            <div className="text-4xl">📋</div>
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+            </div>
           </div>
         </div>
         
@@ -135,7 +139,11 @@ export default function AdminPortal() {
               <p className="text-sm text-gray-500">Open</p>
               <p className="text-3xl font-bold text-yellow-600">{stats.open}</p>
             </div>
-            <div className="text-4xl">🔓</div>
+            <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           </div>
         </div>
         
@@ -145,7 +153,11 @@ export default function AdminPortal() {
               <p className="text-sm text-gray-500">Dispatched</p>
               <p className="text-3xl font-bold text-green-600">{stats.dispatched}</p>
             </div>
-            <div className="text-4xl">✅</div>
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           </div>
         </div>
         
@@ -155,7 +167,11 @@ export default function AdminPortal() {
               <p className="text-sm text-gray-500">Emergency</p>
               <p className="text-3xl font-bold text-red-600">{stats.emergency}</p>
             </div>
-            <div className="text-4xl">🚨</div>
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>
@@ -348,17 +364,18 @@ export default function AdminPortal() {
                 }`}>
                   <div className="flex items-center gap-2 font-medium">
                     {auditType === 'move-in' ? (
-                      <>📥 Move-In Baseline Created</>
+                      <><svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg> Move-In Baseline Created</>
                     ) : (auditResults.items?.filter(i => i.is_new)?.length > 0) ? (
-                      <>⚠️ {auditResults.items?.filter(i => i.is_new)?.length} New Damages Found</>
+                      <><svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg> {auditResults.items?.filter(i => i.is_new)?.length} New Damages Found</>
                     ) : (
-                      <>✅ No New Damages Found</>
+                      <><svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> No New Damages Found</>
                     )}
                   </div>
                   <p className="text-sm mt-1 opacity-80">{auditResults.summary}</p>
                   {auditResults.total_estimated_cost > 0 && (
-                    <p className="text-sm font-medium mt-2">
-                      💰 Estimated Cost: ${auditResults.total_estimated_cost}
+                    <p className="text-sm font-medium mt-2 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Estimated Cost: ${auditResults.total_estimated_cost}
                     </p>
                   )}
                 </div>
@@ -366,8 +383,11 @@ export default function AdminPortal() {
                 {/* Items List */}
                 {auditResults.items?.length > 0 && (
                   <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 font-medium text-sm">
-                      📋 Detected Items ({auditResults.items.length})
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 font-medium text-sm flex items-center gap-2">
+                      <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                      Detected Items ({auditResults.items.length})
                     </div>
                     <div className="max-h-64 overflow-y-auto">
                       {auditResults.items.map((item, idx) => (
@@ -383,8 +403,8 @@ export default function AdminPortal() {
                           </div>
                           <p className="text-gray-600 text-xs mt-0.5">{item.condition}</p>
                           <div className="flex gap-3 text-xs text-gray-400 mt-1">
-                            {item.timestamp && <span>⏱️ {item.timestamp}</span>}
-                            {item.estimated_cost > 0 && <span>💵 ${item.estimated_cost}</span>}
+                            {item.timestamp && <span className="flex items-center gap-1"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>{item.timestamp}</span>}
+                            {item.estimated_cost > 0 && <span className="flex items-center gap-1"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>${item.estimated_cost}</span>}
                           </div>
                         </div>
                       ))}
@@ -396,9 +416,10 @@ export default function AdminPortal() {
             
             <button
               onClick={resetAudit}
-              className="w-full py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition"
+              className="w-full py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition flex items-center justify-center gap-2"
             >
-              ← Start New Audit
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+              Start New Audit
             </button>
           </div>
         ) : (
@@ -465,14 +486,16 @@ export default function AdminPortal() {
               {auditFile ? (
                 <div className="flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg">
                   <div className="flex items-center gap-2 text-purple-700">
-                    <span>🎥</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
                     <span className="text-sm truncate max-w-[200px]">{auditFile.name}</span>
                   </div>
                   <button
                     onClick={() => { setAuditFile(null); auditFileInputRef.current.value = '' }}
                     className="text-purple-600 hover:text-purple-800"
                   >
-                    ✕
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
                 </div>
               ) : (
@@ -480,7 +503,11 @@ export default function AdminPortal() {
                   onClick={() => auditFileInputRef.current?.click()}
                   className="w-full p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition text-center"
                 >
-                  <div className="text-4xl mb-2">📹</div>
+                  <div className="w-12 h-12 mx-auto mb-2 bg-gray-100 rounded-full flex items-center justify-center">
+                    <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </div>
                   <div className="text-sm text-gray-600">Click to upload video</div>
                   <div className="text-xs text-gray-400">MP4, MOV, WebM</div>
                 </button>
@@ -557,7 +584,12 @@ export default function AdminPortal() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <span className="text-2xl">🔧</span>
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
               <h1 className="text-xl font-bold text-gray-800">Fix-It AI Admin</h1>
             </div>
           </div>
@@ -568,23 +600,45 @@ export default function AdminPortal() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-8">
-            {[
-              { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-              { id: 'tickets', label: 'Tickets', icon: '📋' },
-              { id: 'audits', label: 'Audits', icon: '🎥' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-4 px-1 border-b-2 font-medium text-sm transition ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.icon} {tab.label}
-              </button>
-            ))}
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2 ${
+                activeTab === 'dashboard'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+              </svg>
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab('tickets')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2 ${
+                activeTab === 'tickets'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Tickets
+            </button>
+            <button
+              onClick={() => setActiveTab('audits')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2 ${
+                activeTab === 'audits'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              Audits
+            </button>
           </nav>
         </div>
       </div>
