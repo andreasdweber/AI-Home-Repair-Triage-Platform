@@ -48,33 +48,37 @@ GIVE_UP_PHRASES = [
 TRIAGE_SYSTEM_PROMPT = """You are Fix-It AI, a professional property management assistant. Your goal is NOT just to give advice, but to gather specific information to create a complete work order.
 
 The required "Slots" you must fill are:
-- ISSUE: What is broken? (e.g., "Leaking window")
-- SEVERITY: Is it happening right now? Is it damaging property? (e.g., "Active dripping," "Soaking carpet")
-- LOCATION: Precise location? (e.g., "Living room, top frame")
-- ACCESS: Instructions for entry? (e.g., "Key at desk," "Call first")
+- ISSUE: What is broken? (e.g., "Leaking toilet hose")
+- SEVERITY: Is it happening right now? Is it damaging property? (e.g., "Slow drip," "Active spray")
+- LOCATION: Precise location? (e.g., "Behind toilet in master bathroom")
+- ACCESS: Instructions for property entry? (e.g., "Use master key," "Schedule appointment")
+- CONTACT: Phone number or email to reach the tenant (e.g., "555-123-4567")
 
 Your Logic Loop (Execute in order):
 
 1. Analyze Risk: If the issue indicates fire, gas, or massive flooding → Return Action EMERGENCY immediately.
 
-2. Check Slots: Look at the conversation history. Which of the 4 slots are still missing or vague?
+2. Check Slots: Look at the conversation history. Which of the 5 slots are still missing or vague?
 
 3. Formulate Response:
-   - If slots are missing: Ask ONE clear, direct question to fill the most critical missing slot. (e.g., "Is water dripping onto the floor right now?" or "Do we have permission to enter with a master key?"). Do not give generic advice yet.
-   - If all slots are filled: Return Action CREATE_TICKET.
+   - If slots are missing: Ask ONE clear, direct question to fill the most critical missing slot. Do not give generic advice yet.
+   - Priority order: ISSUE → SEVERITY → LOCATION → ACCESS → CONTACT
+   - CONTACT must be an actual phone number or email, not just "contact me"
+   - If all 5 slots are filled with specific values: Return Action CREATE_TICKET.
 
 Output Format (JSON Only):
 {
     "text": "The question you are asking the user...",
     "risk": "Green" | "Yellow" | "Red",
     "action": "QUESTION" | "CREATE_TICKET" | "EMERGENCY",
-    "missing_info": ["Access", "Severity"],
+    "missing_info": ["Contact", "Access"],
     "category": "Plumbing" | "Electrical" | "HVAC" | "Appliance" | "Structural" | "Pest Control" | "Locksmith" | "Other",
     "filled_slots": {
         "issue": "extracted issue or null",
         "severity": "extracted severity or null",
         "location": "extracted location or null",
-        "access": "extracted access info or null"
+        "access": "extracted access info or null",
+        "contact": "extracted phone/email or null"
     }
 }
 
@@ -82,7 +86,8 @@ IMPORTANT RULES:
 - NEVER give generic advice when slots are missing. Your job is to ASK QUESTIONS.
 - Ask only ONE question at a time to fill the most critical missing slot.
 - Prioritize Severity questions for safety assessment.
-- Only return CREATE_TICKET when ALL 4 slots have clear values.
+- CONTACT slot requires an actual phone number or email address - "call me" or "contact me" is NOT sufficient.
+- Only return CREATE_TICKET when ALL 5 slots have clear, specific values.
 - Return EMERGENCY immediately for fire, gas leaks, or major flooding."""
 
 # System prompt for escalation mode
@@ -312,6 +317,7 @@ Return ONLY valid JSON:
                     "severity": filled_slots.get("severity"),
                     "location": filled_slots.get("location"),
                     "access": filled_slots.get("access"),
+                    "contact": filled_slots.get("contact"),
                     "category": result.get("category", "Other"),
                     "risk": result.get("risk", "Yellow")
                 }
@@ -329,7 +335,7 @@ Return ONLY valid JSON:
                 "risk": "Yellow",
                 "action": "QUESTION",
                 "category": "Other",
-                "missing_info": ["Issue", "Severity", "Location", "Access"],
+                "missing_info": ["Issue", "Severity", "Location", "Access", "Contact"],
                 "filled_slots": {},
                 "error": str(e)
             }
@@ -441,22 +447,25 @@ CONVERSATION:
 
 Analyze the conversation and:
 1. Check for EMERGENCY conditions (fire, gas, major flooding) → action: EMERGENCY
-2. Extract any filled slots (issue, severity, location, access)
+2. Extract any filled slots (issue, severity, location, access, contact)
 3. If slots are missing → action: QUESTION (ask ONE question for most critical missing slot)
-4. If all slots are filled → action: CREATE_TICKET
+4. If all 5 slots are filled with specific values → action: CREATE_TICKET
+
+IMPORTANT: The CONTACT slot requires an actual phone number or email address. "Contact me" or "call me" is NOT a valid contact - you must ask for their phone number or email.
 
 Return ONLY valid JSON:
 {{
     "text": "Your response to the user (a question if slots missing, or confirmation if complete)",
     "risk": "Green|Yellow|Red",
     "action": "QUESTION|CREATE_TICKET|EMERGENCY",
-    "missing_info": ["list of missing slots: Issue, Severity, Location, Access"],
+    "missing_info": ["list of missing slots: Issue, Severity, Location, Access, Contact"],
     "category": "Plumbing|Electrical|HVAC|Appliance|Structural|Pest Control|Locksmith|Other",
     "filled_slots": {{
         "issue": "extracted issue or null",
         "severity": "extracted severity or null",
         "location": "extracted location or null",
-        "access": "extracted access info or null"
+        "access": "extracted access info or null",
+        "contact": "extracted phone number or email or null"
     }}
 }}""")
         
@@ -490,6 +499,7 @@ Return ONLY valid JSON:
                     "severity": filled_slots.get("severity"),
                     "location": filled_slots.get("location"),
                     "access": filled_slots.get("access"),
+                    "contact": filled_slots.get("contact"),
                     "category": result.get("category", "Other"),
                     "risk": result.get("risk", "Yellow")
                 }
@@ -507,7 +517,7 @@ Return ONLY valid JSON:
                 "risk": "Yellow",
                 "action": "QUESTION",
                 "category": "Other",
-                "missing_info": ["Issue", "Severity", "Location", "Access"],
+                "missing_info": ["Issue", "Severity", "Location", "Access", "Contact"],
                 "filled_slots": {},
                 "escalation_mode": False,
                 "contact_info": {},
